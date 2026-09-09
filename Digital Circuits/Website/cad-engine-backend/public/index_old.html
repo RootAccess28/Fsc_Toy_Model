@@ -1,0 +1,1253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Digital Logic CAD Engine</title>
+    <style>
+        :root {
+            /* Vibrant & Soft Modern Indigo/Violet Dark Palette */
+            --bg: #0f172a;
+            --panel: rgba(30, 41, 59, 0.88);
+            --border: #334155;
+            --border-subtle: #475569;
+            --accent-cyan: #38bdf8;
+            --accent-teal: #2dd4bf;
+            --accent-green: #4ade80;
+            --accent-purple: #818cf8;
+            --accent-pink: #f472b6;
+            --accent-coral: #fb7185;
+            --accent-amber: #fcd34d;
+            --code-text: #fef08a;
+            --text-main: #f8fafc;
+            --text-sub: #cbd5e1;
+            --glass-bg: rgba(15, 23, 42, 0.7);
+        }
+
+        * { box-sizing: border-box; }
+        
+        html, body {
+            width: 100%;
+            max-width: 100vw;
+            overflow-x: hidden;
+            margin: 0;
+            padding: 16px;
+            background: radial-gradient(circle at 15% 15%, #1e1b4b 0%, var(--bg) 55%, #090d16 100%);
+            color: var(--text-main);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        /* Top Centered Banner Header with Team Dropdown */
+        .project-badge {
+            text-align: center;
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.18), rgba(236, 72, 153, 0.15));
+            border: 1px solid rgba(129, 140, 248, 0.5);
+            border-radius: 12px;
+            padding: 10px 18px;
+            margin: 0 auto 16px auto;
+            max-width: 520px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 4px 20px rgba(99, 102, 241, 0.2);
+        }
+        .project-badge .project-title {
+            font-size: 0.82rem;
+            text-transform: uppercase;
+            letter-spacing: 1.2px;
+            color: var(--accent-cyan);
+            font-weight: 800;
+        }
+        .team-toggle-btn {
+            background: rgba(99, 102, 241, 0.15);
+            border: 1px solid var(--accent-purple);
+            color: #c7d2fe;
+            padding: 5px 14px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            font-weight: 600;
+            margin-top: 6px;
+            transition: all 0.2s ease;
+        }
+        .team-toggle-btn:hover {
+            background: var(--accent-purple);
+            color: #0f172a;
+            box-shadow: 0 0 12px rgba(129, 140, 248, 0.4);
+        }
+        .team-list-card {
+            display: none;
+            margin-top: 10px;
+            padding-top: 8px;
+            border-top: 1px dashed var(--border-subtle);
+            text-align: left;
+        }
+        .team-list-card.active {
+            display: block;
+        }
+        .team-member {
+            font-size: 0.85rem;
+            display: flex;
+            justify-content: space-between;
+            padding: 4px 8px;
+            color: var(--text-main);
+            border-radius: 6px;
+            margin-bottom: 2px;
+        }
+        .team-member:nth-child(even) {
+            background: rgba(255, 255, 255, 0.05);
+        }
+        .team-member .roll {
+            color: var(--accent-pink);
+            font-family: monospace;
+            font-weight: 600;
+        }
+
+        header {
+            margin-bottom: 20px;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 14px;
+            text-align: center;
+        }
+        h1 { 
+            margin: 0 0 6px 0; 
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple), var(--accent-pink));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-weight: 800; 
+            font-size: 1.75rem; 
+        }
+        p.subtitle { margin: 0; color: var(--text-sub); font-size: 0.92rem; font-weight: 450; }
+
+        /* Navigation Tabs */
+        .tabs { display: flex; gap: 10px; margin-bottom: 18px; flex-wrap: wrap; justify-content: center; }
+        .tab-btn {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            color: var(--text-sub);
+            padding: 9px 18px;
+            cursor: pointer;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            transition: all 0.25s ease;
+            backdrop-filter: blur(8px);
+        }
+        .tab-btn:hover { 
+            color: var(--text-main); 
+            border-color: var(--accent-cyan);
+            transform: translateY(-1px);
+        }
+        .tab-btn.active {
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+            color: #0f172a;
+            border-color: transparent;
+            font-weight: 700;
+            box-shadow: 0 4px 14px rgba(56, 189, 248, 0.35);
+        }
+
+        /* Control Cards */
+        .input-card {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 22px;
+            backdrop-filter: blur(12px);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+        }
+        .mode-panel { display: none; }
+        .mode-panel.active { display: block; }
+
+        .syntax-guide {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(135px, 1fr));
+            gap: 8px;
+            background: rgba(15, 23, 42, 0.6);
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px dashed var(--border);
+            margin: 12px 0;
+        }
+        .syntax-item { font-size: 0.82rem; color: var(--text-sub); }
+        .syntax-item code { color: var(--accent-pink); font-weight: bold; background: rgba(244, 114, 182, 0.14); padding: 2px 5px; border-radius: 4px; }
+
+        input[type="text"], select {
+            width: 100%;
+            padding: 11px;
+            background: var(--glass-bg);
+            border: 1px solid var(--border);
+            color: var(--text-main);
+            border-radius: 8px;
+            font-family: inherit;
+            font-size: 0.92rem;
+            margin-top: 5px;
+            transition: all 0.2s ease;
+        }
+        input[type="text"]:focus, select:focus { 
+            border-color: var(--accent-cyan); 
+            outline: none; 
+            box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.2);
+        }
+
+        .btn-action {
+            background: linear-gradient(135deg, var(--accent-teal), #0284c7);
+            color: #04131f;
+            border: none;
+            padding: 11px 22px;
+            font-weight: 700;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-top: 12px;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 12px rgba(45, 212, 191, 0.3);
+        }
+        .btn-action:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 16px rgba(45, 212, 191, 0.45);
+        }
+
+        /* Pipeline Grid */
+        .pipeline-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 18px;
+            width: 100%;
+        }
+
+        .card {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+        }
+        .card h3 { 
+            margin: 0 0 12px 0; 
+            font-size: 1.02rem; 
+            color: var(--accent-cyan); 
+            display: flex; 
+            align-items: center;
+            gap: 6px;
+        }
+
+        .table-wrapper { max-height: 230px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; }
+        table { width: 100%; border-collapse: collapse; text-align: center; }
+        th, td { padding: 8px; border-bottom: 1px solid var(--border); font-size: 0.86rem; }
+        th { background: rgba(15, 23, 42, 0.95); color: var(--accent-cyan); position: sticky; top: 0; }
+
+        .kmap-container { display: flex; flex-direction: column; align-items: center; justify-content: center; margin: 10px 0; }
+        .kmap-grid { display: grid; gap: 4px; background: var(--border); padding: 4px; border-radius: 8px; }
+        .kmap-cell {
+            background: rgba(15, 23, 42, 0.9);
+            padding: 10px;
+            text-align: center;
+            font-weight: bold;
+            font-size: 0.88rem;
+            border-radius: 5px;
+            transition: all 0.2s ease;
+        }
+        .kmap-cell.active {
+            background: rgba(74, 222, 128, 0.2);
+            color: var(--accent-green);
+            border: 1px solid var(--accent-green);
+            box-shadow: inset 0 0 8px rgba(74, 222, 128, 0.2);
+        }
+        
+        /* Interactive K-Map Input Cells */
+        .kmap-input-cell select {
+            background: rgba(15, 23, 42, 0.85);
+            color: var(--accent-cyan);
+            border: 1px solid var(--border);
+            padding: 4px;
+            font-weight: bold;
+            text-align: center;
+            border-radius: 6px;
+            cursor: pointer;
+            margin-top: 0;
+        }
+
+        pre {
+            background: rgba(15, 23, 42, 0.9);
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            color: var(--code-text);
+            font-family: monospace;
+            font-size: 0.82rem;
+            overflow-x: auto;
+            margin: 0;
+            white-space: pre-wrap;
+            word-break: break-word;
+            line-height: 1.45;
+        }
+
+        .gate-row {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            background: rgba(15, 23, 42, 0.7);
+            padding: 8px 10px;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            border: 1px solid var(--border);
+        }
+        .gate-row select, .gate-row input { margin: 0; padding: 6px; }
+
+        /* Floating AI Widget Styles */
+        .ai-widget-btn {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            background: linear-gradient(135deg, var(--accent-purple), var(--accent-pink));
+            color: #ffffff;
+            border: none;
+            border-radius: 50px;
+            padding: 12px 22px;
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow: 0 6px 20px rgba(129, 140, 248, 0.4);
+            z-index: 1000;
+            transition: all 0.2s ease;
+        }
+        .ai-widget-btn:hover {
+            transform: translateY(-2px) scale(1.03);
+            box-shadow: 0 8px 25px rgba(244, 114, 182, 0.5);
+        }
+
+        .ai-chat-drawer {
+            position: fixed;
+            bottom: 86px;
+            right: 24px;
+            width: 375px;
+            height: 490px;
+            background: #0f172a;
+            border: 1px solid var(--border-subtle);
+            border-radius: 16px;
+            display: none;
+            flex-direction: column;
+            box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
+            z-index: 1000;
+            overflow: hidden;
+        }
+
+        .ai-chat-header {
+            background: linear-gradient(135deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.95));
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--border);
+            font-weight: 700;
+            color: var(--accent-cyan);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .ai-chat-messages {
+            flex: 1;
+            padding: 14px;
+            overflow-y: auto;
+            font-size: 0.88rem;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .chat-msg {
+            padding: 10px 14px;
+            border-radius: 12px;
+            max-width: 85%;
+            word-break: break-word;
+            line-height: 1.45;
+        }
+        .chat-msg.user { 
+            background: linear-gradient(135deg, #0284c7, #2563eb); 
+            color: #ffffff; 
+            align-self: flex-end; 
+            border-bottom-right-radius: 4px;
+            box-shadow: 0 2px 8px rgba(2, 132, 199, 0.3);
+        }
+        .chat-msg.ai { 
+            background: rgba(30, 41, 59, 0.9); 
+            color: var(--text-main); 
+            border: 1px solid var(--border); 
+            align-self: flex-start; 
+            border-bottom-left-radius: 4px;
+        }
+
+        .ai-chat-input {
+            display: flex;
+            border-top: 1px solid var(--border);
+            background: #090d16;
+            padding: 6px;
+        }
+        .ai-chat-input input {
+            flex: 1;
+            border: none;
+            background: transparent;
+            padding: 10px 12px;
+            color: #fff;
+            margin-top: 0;
+        }
+        .ai-chat-input input:focus {
+            box-shadow: none;
+        }
+        .ai-chat-input button {
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+            border: none;
+            color: #0f172a;
+            font-weight: 700;
+            padding: 0 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .ai-chat-input button:hover {
+            opacity: 0.95;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <!-- Top Centered Header with Expandable Team Section -->
+        <div class="project-badge">
+            <div class="project-title">Digital Logic Design CAD Project</div>
+            <button class="team-toggle-btn" onclick="toggleTeamList()">✦ View Team / Built By</button>
+            <div class="team-list-card" id="teamListCard">
+                <div class="team-member"><span>NITIN</span><span class="roll">CO26BTECH11021</span></div>
+                <div class="team-member"><span>VAIBHAV</span><span class="roll">CO26BTECH11031</span></div>
+                <div class="team-member"><span>MAYANK</span><span class="roll">CO26BTECH11016</span></div>
+                <div class="team-member"><span>SHIVANSI</span><span class="roll">CO26BTECH11027</span></div>
+                <div class="team-member"><span>ANUSHKA</span><span class="roll">CO26BTECH11030</span></div>
+            </div>
+        </div>
+
+        <header>
+            <h1>Digital Logic CAD Engine</h1>
+            <p class="subtitle">Boolean Reduction, Interactive K-Maps, Gate Technology Mapping, and RTL Schematics</p>
+        </header>
+
+        <!-- Mode Tabs -->
+        <div class="tabs">
+            <button class="tab-btn active" onclick="setMode('mode-expr')">1. Logic Expression Input</button>
+            <button class="tab-btn" onclick="setMode('mode-tt')">2. Truth Table Input</button>
+            <button class="tab-btn" onclick="setMode('mode-kmap')">3. K-Map Matrix Input</button>
+            <button class="tab-btn" onclick="setMode('mode-circuit')">4. Circuit Netlist Builder</button>
+        </div>
+
+        <!-- Mode 1 Panel -->
+        <div id="mode-expr" class="input-card mode-panel active">
+            <label style="font-size: 0.9rem;"><b>Enter Boolean Logic Expression:</b></label>
+            <input type="text" id="exprInput" placeholder="Enter Your Expression Here" value="">
+            
+            <div class="syntax-guide">
+                <div class="syntax-item"><b>AND:</b> <code>&amp;</code> <code>&amp;&amp;</code></div>
+                <div class="syntax-item"><b>OR:</b> <code>|</code> <code>||</code></div>
+                <div class="syntax-item"><b>NOT:</b> <code>~</code> <code>!</code></div>
+                <div class="syntax-item"><b>XOR:</b> <code>^</code></div>
+                <div class="syntax-item"><b>NAND:</b> <code>~&amp;</code> <code>!&amp;</code></div>
+                <div class="syntax-item"><b>NOR:</b> <code>~|</code> <code>!|</code></div>
+            </div>
+
+            <button class="btn-action" onclick="synthesizePipeline()">Synthesize Pipeline</button>
+        </div>
+
+        <!-- Mode 2 Panel -->
+        <div id="mode-tt" class="input-card mode-panel">
+            <label style="font-size: 0.9rem;"><b>Inputs Count:</b></label>
+            <select id="ttVarCount" style="width: auto; display: inline-block; margin-left: 6px;" onchange="renderTTInputGrid()">
+                <option value="2">2 Variables (A, B)</option>
+                <option value="3" selected>3 Variables (A, B, C)</option>
+                <option value="4">4 Variables (A, B, C, D)</option>
+            </select>
+            <div id="ttGridContainer" style="margin-top: 10px;"></div>
+            <button class="btn-action" onclick="synthesizePipeline()">Synthesize Truth Table</button>
+        </div>
+
+        <!-- Mode 3 Panel: K-Map Input -->
+        <div id="mode-kmap" class="input-card mode-panel">
+            <label style="font-size: 0.9rem;"><b>Select K-Map Variable Dimension:</b></label>
+            <select id="kmapVarCount" style="width: auto; display: inline-block; margin-left: 6px;" onchange="renderKMapInputGrid()">
+                <option value="2">2 Variables (A, B)</option>
+                <option value="3" selected>3 Variables (A, B, C)</option>
+                <option value="4">4 Variables (A, B, C, D)</option>
+            </select>
+            <div id="kmapInputGridContainer" class="kmap-container" style="margin-top: 10px;"></div>
+            <button class="btn-action" onclick="synthesizePipeline()">Synthesize K-Map Matrix</button>
+        </div>
+
+        <!-- Mode 4 Panel -->
+        <div id="mode-circuit" class="input-card mode-panel">
+            <div id="circuitRows"></div>
+            <button class="tab-btn" style="margin-top: 6px;" onclick="addGateRow()">+ Add Gate</button>
+            <button class="btn-action" style="display: block;" onclick="synthesizePipeline()">Synthesize Netlist</button>
+        </div>
+
+        <!-- Pipeline Outputs -->
+        <div class="pipeline-grid">
+            <!-- Step 1 -->
+            <div class="card">
+                <h3>Step 1: Evaluated Truth Table</h3>
+                <div id="truthTableOutput" class="table-wrapper"></div>
+            </div>
+
+            <!-- Step 2 -->
+            <div class="card">
+                <h3>Step 2: Karnaugh Map & SOP Minimization</h3>
+                <div id="kmapOutput" class="kmap-container"></div>
+                <p style="margin: 6px 0 0 0; font-size: 0.85rem;"><b>Minimal Sum-Of-Products (SOP):</b></p>
+                <div id="minimizedExpr" style="color: var(--accent-green); font-family: monospace; font-weight: bold; margin-top: 2px;">--</div>
+            </div>
+
+            <!-- Step 3 -->
+            <div class="card">
+                <h3>Step 3: Gate Technology Mapping</h3>
+                <label style="font-size: 0.8rem;"><b>Target Technology Library:</b></label>
+                <select id="techLibrary" onchange="synthesizePipeline()">
+                    <option value="NAND">Universal 2-Input NAND Gate Library</option>
+                    <option value="NOR">Universal NOR Gate Library</option>
+                    <option value="XOR">ESOP / Standard Gate Mapping</option>
+                </select>
+                <p style="margin: 8px 0 2px 0; font-size: 0.8rem;"><b>Technology Substitutions:</b></p>
+                <pre id="techMappingOutput">--</pre>
+            </div>
+
+            <!-- Step 4 -->
+            <div class="card">
+                <h3>Step 4: RTL & Schematics</h3>
+                <p style="margin: 0 0 2px 0; font-size: 0.8rem;"><b>Synthesizable Structural Verilog:</b></p>
+                <pre id="verilogOutput">// Verilog Code</pre>
+                <p style="margin: 8px 0 4px 0; font-size: 0.8rem;"><b>Gate-Level Schematic Netlist:</b></p>
+                <div id="schematicContainer" style="background:#ffffff; border:1px solid #cbd5e1; border-radius:8px; padding:8px; width:100%; overflow:hidden;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Gemini CAD Assistant Widget -->
+    <button class="ai-widget-btn" onclick="toggleAIChat()">✦ Ask AI Assistant</button>
+
+    <div class="ai-chat-drawer" id="aiChatDrawer">
+        <div class="ai-chat-header">
+            <span>AI Logic Assistant</span>
+            <span style="cursor:pointer;" onclick="toggleAIChat()">✕</span>
+        </div>
+        <div class="ai-chat-messages" id="chatMessages">
+            <div class="chat-msg ai">Hello! I am connected to your current CAD workspace. Ask me to explain the current K-Map, debug your logic expression, or generate custom Verilog!</div>
+        </div>
+        <div class="ai-chat-input">
+            <input type="text" id="userChatInput" placeholder="Ask about this circuit..." onkeydown="if(event.key==='Enter') sendGeminiQuery()">
+            <button onclick="sendGeminiQuery()">Send</button>
+        </div>
+    </div>
+
+    <script>
+        let currentMode = 'mode-expr';
+
+        function toggleTeamList() {
+            const list = document.getElementById('teamListCard');
+            list.classList.toggle('active');
+        }
+
+        function setMode(modeId) {
+            currentMode = modeId;
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.mode-panel').forEach(p => p.classList.remove('active'));
+            event.target.classList.add('active');
+            document.getElementById(modeId).classList.add('active');
+            if(modeId === 'mode-tt') renderTTInputGrid();
+            if(modeId === 'mode-kmap') renderKMapInputGrid();
+            if(modeId === 'mode-circuit' && document.getElementById('circuitRows').children.length === 0) setupDefaultCircuit();
+        }
+
+        // 1. EXPRESSION PARSER
+        function parseAndEvalExpression() {
+            const raw = document.getElementById('exprInput').value.trim();
+            if(!raw) throw new Error("Expression is empty");
+            const vars = Array.from(new Set(raw.match(/[A-Za-z0-9_]+/g) || [])).filter(v => !['NAND','NOR','AND','OR','NOT','XOR'].includes(v)).sort();
+            if(!vars.length) throw new Error("No variables found");
+
+            const rowsCount = Math.pow(2, vars.length);
+            const rows = [];
+
+            for(let i = 0; i < rowsCount; i++) {
+                const inputs = [];
+                for(let j = vars.length - 1; j >= 0; j--) {
+                    inputs.push((i >> j) & 1);
+                }
+
+                let exprStr = raw;
+                vars.forEach((v, idx) => {
+                    exprStr = exprStr.replace(new RegExp('\\b' + v + '\\b', 'g'), inputs[idx]);
+                });
+
+                exprStr = exprStr.replace(/~\&|!\&/g, 'NAND')
+                                 .replace(/~\||!\|/g, 'NOR')
+                                 .replace(/&&|&/g, '&&')
+                                 .replace(/\|\||\|/g, '||')
+                                 .replace(/!|~/g, '!')
+                                 .replace(/\^/g, '^');
+
+                const outVal = evaluateExpressionTokens(exprStr);
+                rows.push({ inputs, output: outVal });
+            }
+            return { vars, rows };
+        }
+
+        function evaluateExpressionTokens(str) {
+            try {
+                let s = str.replace(/(\d)\s*NAND\s*(\d)/g, "(!($1 && $2) ? 1 : 0)");
+                s = s.replace(/(\d)\s*NOR\s*(\d)/g, "(!($1 || $2) ? 1 : 0)");
+                return eval(s) ? 1 : 0;
+            } catch(e) {
+                return 0;
+            }
+        }
+
+        // 2. TRUTH TABLE INPUT MATRIX
+        function renderTTInputGrid() {
+            const n = parseInt(document.getElementById('ttVarCount').value);
+            const vars = ['A', 'B', 'C', 'D'].slice(0, n);
+            const container = document.getElementById('ttGridContainer');
+
+            let html = '<table><tr>';
+            vars.forEach(v => html += `<th>${v}</th>`);
+            html += '<th>Y (Output)</th></tr>';
+
+            const numRows = Math.pow(2, n);
+            for(let i = 0; i < numRows; i++) {
+                html += '<tr>';
+                for(let j = n - 1; j >= 0; j--) {
+                    html += `<td>${(i >> j) & 1}</td>`;
+                }
+                html += `<td><select class="tt-row-val"><option value="0">0</option><option value="1">1</option><option value="X">X</option></select></td></tr>`;
+            }
+            html += '</table>';
+            container.innerHTML = html;
+        }
+
+        function parseTTInput() {
+            const n = parseInt(document.getElementById('ttVarCount').value);
+            const vars = ['A', 'B', 'C', 'D'].slice(0, n);
+            const selects = document.querySelectorAll('.tt-row-val');
+            const rows = [];
+
+            selects.forEach((sel, idx) => {
+                const inputs = [];
+                for(let j = n - 1; j >= 0; j--) {
+                    inputs.push((idx >> j) & 1);
+                }
+                rows.push({ inputs, output: sel.value === 'X' ? 'X' : parseInt(sel.value) });
+            });
+            return { vars, rows };
+        }
+
+        // 3. K-MAP INPUT ENGINE
+        function renderKMapInputGrid() {
+            const n = parseInt(document.getElementById('kmapVarCount').value);
+            const vars = ['A', 'B', 'C', 'D'].slice(0, n);
+            const container = document.getElementById('kmapInputGridContainer');
+            container.innerHTML = '';
+
+            const gray2 = [0, 1];
+            const gray4 = [0, 1, 3, 2];
+
+            let rowVars = [], colVars = [], rowGray = [], colGray = [];
+
+            if(n === 2) {
+                rowVars = [vars[0]]; colVars = [vars[1]];
+                rowGray = gray2; colGray = gray2;
+            } else if(n === 3) {
+                rowVars = [vars[0]]; colVars = [vars[1], vars[2]];
+                rowGray = gray2; colGray = gray4;
+            } else if(n === 4) {
+                rowVars = [vars[0], vars[1]]; colVars = [vars[2], vars[3]];
+                rowGray = gray4; colGray = gray4;
+            }
+
+            let gridHtml = `<div class="kmap-grid" style="grid-template-columns: repeat(${colGray.length + 1}, 1fr);">`;
+            gridHtml += `<div class="kmap-cell" style="color:var(--accent-cyan);">${rowVars.join('')}\\${colVars.join('')}</div>`;
+
+            colGray.forEach(c => {
+                gridHtml += `<div class="kmap-cell" style="color:var(--text-sub);">${c.toString(2).padStart(colVars.length, '0')}</div>`;
+            });
+
+            rowGray.forEach(r => {
+                const rStr = r.toString(2).padStart(rowVars.length, '0');
+                gridHtml += `<div class="kmap-cell" style="color:var(--text-sub);">${rStr}</div>`;
+                colGray.forEach(c => {
+                    const cStr = c.toString(2).padStart(colVars.length, '0');
+                    const mintermIdx = parseInt(rStr + cStr, 2);
+                    gridHtml += `
+                        <div class="kmap-cell kmap-input-cell">
+                            <select class="kmap-cell-val" data-minterm="${mintermIdx}">
+                                <option value="0">0</option>
+                                <option value="1">1</option>
+                                <option value="X">X</option>
+                            </select>
+                        </div>`;
+                });
+            });
+
+            gridHtml += '</div>';
+            container.innerHTML = gridHtml;
+        }
+
+        function parseKMapInput() {
+            const n = parseInt(document.getElementById('kmapVarCount').value);
+            const vars = ['A', 'B', 'C', 'D'].slice(0, n);
+            const selects = document.querySelectorAll('.kmap-cell-val');
+            const rowsCount = Math.pow(2, n);
+            const rows = new Array(rowsCount);
+
+            selects.forEach(sel => {
+                const mintermIdx = parseInt(sel.getAttribute('data-minterm'));
+                const inputs = [];
+                for(let j = n - 1; j >= 0; j--) {
+                    inputs.push((mintermIdx >> j) & 1);
+                }
+                const val = sel.value === 'X' ? 'X' : parseInt(sel.value);
+                rows[mintermIdx] = { inputs, output: val };
+            });
+
+            return { vars, rows };
+        }
+
+        // 4. CIRCUIT SCHEMATIC INPUT
+        let gateIdCounter = 0;
+        function setupDefaultCircuit() {
+            document.getElementById('circuitRows').innerHTML = '';
+            addGateRow('&', 'A', 'B', 'w1');
+            addGateRow('|', 'w1', 'C', 'Y');
+        }
+
+        function addGateRow(type='&', in1='A', in2='B', out='w1') {
+            gateIdCounter++;
+            const container = document.getElementById('circuitRows');
+            const div = document.createElement('div');
+            div.className = 'gate-row';
+            div.id = `gate-row-${gateIdCounter}`;
+            div.innerHTML = `
+                <select class="gate-type">
+                    <option value="&" ${type==='&'?'selected':''}>&amp;</option>
+                    <option value="|" ${type==='|'?'selected':''}>|</option>
+                    <option value="~&" ${type==='~&'?'selected':''}>~&amp;</option>
+                    <option value="~|" ${type==='~|'?'selected':''}>~|</option>
+                    <option value="^" ${type==='^'?'selected':''}>^</option>
+                </select>
+                In 1: <input type="text" class="gate-in1" value="${in1}" style="width:40px;">
+                In 2: <input type="text" class="gate-in2" value="${in2}" style="width:40px;">
+                Out: <input type="text" class="gate-out" value="${out}" style="width:40px;">
+                <button onclick="document.getElementById('gate-row-${gateIdCounter}').remove()" style="background:none; border:none; color:var(--accent-pink); cursor:pointer;">✕</button>
+            `;
+            container.appendChild(div);
+        }
+
+        function parseCircuitInput() {
+            const rows = document.querySelectorAll('.gate-row');
+            const gates = [];
+            const drivenNets = new Set();
+            const usedNets = new Set();
+
+            rows.forEach(r => {
+                const type = r.querySelector('.gate-type').value;
+                const in1 = r.querySelector('.gate-in1').value.trim();
+                const in2 = r.querySelector('.gate-in2').value.trim();
+                const out = r.querySelector('.gate-out').value.trim();
+                gates.push({ type, in1, in2, out });
+                drivenNets.add(out);
+                usedNets.add(in1);
+                usedNets.add(in2);
+            });
+
+            const vars = Array.from(usedNets).filter(n => !drivenNets.has(n)).sort();
+            const totalRows = Math.pow(2, vars.length);
+            const resultRows = [];
+
+            for(let i = 0; i < totalRows; i++) {
+                const env = {};
+                vars.forEach((v, idx) => {
+                    env[v] = (i >> (vars.length - 1 - idx)) & 1;
+                });
+
+                let iteration = 0;
+                while(iteration < 10) {
+                    gates.forEach(g => {
+                        if(env[g.in1] !== undefined && env[g.in2] !== undefined) {
+                            const a = env[g.in1], b = env[g.in2];
+                            if(g.type === '&') env[g.out] = a & b;
+                            else if(g.type === '|') env[g.out] = a | b;
+                            else if(g.type === '~&') env[g.out] = !(a & b) ? 1 : 0;
+                            else if(g.type === '~|') env[g.out] = !(a || b) ? 1 : 0;
+                            else if(g.type === '^') env[g.out] = a ^ b;
+                        }
+                    });
+                    iteration++;
+                }
+
+                const inputs = vars.map(v => env[v]);
+                const finalOutput = env['Y'] !== undefined ? env['Y'] : env[gates[gates.length - 1].out];
+                resultRows.push({ inputs, output: finalOutput !== undefined ? finalOutput : 0 });
+            }
+            return { vars, rows: resultRows };
+        }
+
+        // CAD PIPELINE ROUTER
+        function synthesizePipeline() {
+            let data;
+            try {
+                if(currentMode === 'mode-expr') data = parseAndEvalExpression();
+                else if(currentMode === 'mode-tt') data = parseTTInput();
+                else if(currentMode === 'mode-kmap') data = parseKMapInput();
+                else if(currentMode === 'mode-circuit') data = parseCircuitInput();
+            } catch(e) {
+                return;
+            }
+
+            renderTruthTable(data.vars, data.rows);
+            const sop = renderKMap(data.vars, data.rows);
+            renderTechMapping(data.vars, sop);
+            renderVerilogAndSchematic(data.vars, sop);
+        }
+
+        function renderTruthTable(vars, rows) {
+            let html = '<table><tr>';
+            vars.forEach(v => html += `<th>${v}</th>`);
+            html += '<th>Y</th></tr>';
+
+            rows.forEach(r => {
+                html += '<tr>';
+                r.inputs.forEach(i => html += `<td>${i}</td>`);
+                html += `<td style="color:var(--accent-cyan); font-weight:bold;">${r.output}</td></tr>`;
+            });
+            html += '</table>';
+            document.getElementById('truthTableOutput').innerHTML = html;
+        }
+
+        // QUINE-MCCLUSKEY EXACT MINIMIZATION ALGORITHM
+        function quineMcCluskey(vars, rows) {
+            const onSet = [];
+            const dcSet = [];
+
+            rows.forEach((r, idx) => {
+                if (r.output === 1 || r.output === '1') onSet.push(idx);
+                else if (r.output === 'X' || r.output === 'x') dcSet.push(idx);
+            });
+
+            if (onSet.length === 0) return "0";
+            if (onSet.length + dcSet.length === Math.pow(2, vars.length)) return "1";
+
+            const numVars = vars.length;
+            let groups = {};
+
+            const allTerms = [...onSet, ...dcSet];
+            allTerms.forEach(minterm => {
+                const bin = minterm.toString(2).padStart(numVars, '0');
+                const ones = (bin.match(/1/g) || []).length;
+                if (!groups[ones]) groups[ones] = [];
+                groups[ones].push({ mask: bin, minterms: [minterm], combined: false });
+            });
+
+            const primeImplicants = [];
+            let currentGroups = groups;
+
+            while (Object.keys(currentGroups).length > 0) {
+                const nextGroups = {};
+                const keys = Object.keys(currentGroups).map(Number).sort((a, b) => a - b);
+                let mergedAny = false;
+
+                for (let i = 0; i < keys.length - 1; i++) {
+                    const k1 = keys[i];
+                    const k2 = keys[i + 1];
+                    if (k2 !== k1 + 1) continue;
+
+                    const group1 = currentGroups[k1];
+                    const group2 = currentGroups[k2];
+
+                    group1.forEach(t1 => {
+                        group2.forEach(t2 => {
+                            let diffCount = 0;
+                            let diffIndex = -1;
+                            for (let j = 0; j < numVars; j++) {
+                                if (t1.mask[j] !== t2.mask[j]) {
+                                    diffCount++;
+                                    diffIndex = j;
+                                }
+                            }
+
+                            if (diffCount === 1) {
+                                t1.combined = true;
+                                t2.combined = true;
+                                mergedAny = true;
+
+                                const newMask = t1.mask.substring(0, diffIndex) + '-' + t1.mask.substring(diffIndex + 1);
+                                const newMinterms = Array.from(new Set([...t1.minterms, ...t2.minterms])).sort((a, b) => a - b);
+
+                                const ones = (newMask.replace(/-/g, '').match(/1/g) || []).length;
+                                if (!nextGroups[ones]) nextGroups[ones] = [];
+
+                                if (!nextGroups[ones].some(item => item.mask === newMask)) {
+                                    nextGroups[ones].push({ mask: newMask, minterms: newMinterms, combined: false });
+                                }
+                            }
+                        });
+                    });
+                }
+
+                Object.values(currentGroups).forEach(group => {
+                    group.forEach(term => {
+                        if (!term.combined) {
+                            if (!primeImplicants.some(pi => pi.mask === term.mask)) {
+                                primeImplicants.push(term);
+                            }
+                        }
+                    });
+                });
+
+                if (!mergedAny) break;
+                currentGroups = nextGroups;
+            }
+
+            let uncovered = new Set(onSet);
+            const essentialPIs = [];
+
+            while (uncovered.size > 0) {
+                let bestPI = null;
+                let maxCovered = -1;
+
+                primeImplicants.forEach(pi => {
+                    const covers = pi.minterms.filter(m => uncovered.has(m)).length;
+                    if (covers > maxCovered) {
+                        maxCovered = covers;
+                        bestPI = pi;
+                    }
+                });
+
+                if (!bestPI || maxCovered <= 0) break;
+
+                essentialPIs.push(bestPI);
+                bestPI.minterms.forEach(m => uncovered.delete(m));
+            }
+
+            const formatTerm = (mask) => {
+                const literals = [];
+                for (let i = 0; i < numVars; i++) {
+                    if (mask[i] === '1') literals.push(vars[i]);
+                    else if (mask[i] === '0') literals.push(`~${vars[i]}`);
+                }
+                return literals.length === 0 ? "1" : literals.join(' & ');
+            };
+
+            return essentialPIs.map(pi => `(${formatTerm(pi.mask)})`).join(' | ');
+        }
+
+        function renderKMap(vars, rows) {
+            const container = document.getElementById('kmapOutput');
+            const sopElem = document.getElementById('minimizedExpr');
+            container.innerHTML = '';
+
+            const gray2 = [0, 1];
+            const gray4 = [0, 1, 3, 2];
+
+            let rowVars = [], colVars = [], rowGray = [], colGray = [];
+
+            if(vars.length === 2) {
+                rowVars = [vars[0]]; colVars = [vars[1]];
+                rowGray = gray2; colGray = gray2;
+            } else if(vars.length === 3) {
+                rowVars = [vars[0]]; colVars = [vars[1], vars[2]];
+                rowGray = gray2; colGray = gray4;
+            } else if(vars.length === 4) {
+                rowVars = [vars[0], vars[1]]; colVars = [vars[2], vars[3]];
+                rowGray = gray4; colGray = gray4;
+            } else {
+                container.innerHTML = `<span style="font-size:0.8rem; color:var(--text-sub);">Visual K-Map supported for 2-4 variables.</span>`;
+                const sop = quineMcCluskey(vars, rows);
+                sopElem.innerText = sop;
+                return sop;
+            }
+
+            let gridHtml = `<div class="kmap-grid" style="grid-template-columns: repeat(${colGray.length + 1}, 1fr);">`;
+            gridHtml += `<div class="kmap-cell" style="color:var(--accent-cyan);">${rowVars.join('')}\\${colVars.join('')}</div>`;
+
+            colGray.forEach(c => {
+                gridHtml += `<div class="kmap-cell" style="color:var(--text-sub);">${c.toString(2).padStart(colVars.length, '0')}</div>`;
+            });
+
+            rowGray.forEach(r => {
+                const rStr = r.toString(2).padStart(rowVars.length, '0');
+                gridHtml += `<div class="kmap-cell" style="color:var(--text-sub);">${rStr}</div>`;
+                colGray.forEach(c => {
+                    const cStr = c.toString(2).padStart(colVars.length, '0');
+                    const mintermIdx = parseInt(rStr + cStr, 2);
+                    const cellVal = rows[mintermIdx] ? rows[mintermIdx].output : 0;
+                    gridHtml += `<div class="kmap-cell ${cellVal === 1 ? 'active' : ''}">${cellVal}</div>`;
+                });
+            });
+
+            gridHtml += '</div>';
+            container.innerHTML = gridHtml;
+
+            const sop = quineMcCluskey(vars, rows);
+            sopElem.innerText = sop;
+            return sop;
+        }
+
+        function renderTechMapping(vars, sop) {
+            const tech = document.getElementById('techLibrary').value;
+            const container = document.getElementById('techMappingOutput');
+            let text = "";
+
+            if(tech === 'NAND') {
+                text = `2-INPUT NAND CONVERSIONS:\n`;
+                text += `NOT(A)   => ~&(A, A)\n`;
+                text += `A & B => ~&(~&(A, B), ~&(A, B))\n`;
+                text += `A | B  => ~&(~&(A, A), ~&(B, B))\n`;
+                text += `Mapped: Y = ~&_2IN_NET(${sop})`;
+            } else if(tech === 'NOR') {
+                text = `~(A)   => ~|(A, A)\n`;
+                text += `A | B  => ~|(~|(A, B), ~|(A, B))\n`;
+                text += `A & B => ~|(~|(A, A), ~|(B, B))\n`;
+                text += `Mapped: Y = ~|_NET(${sop})`;
+            } else {
+                text = `ESOP Expansion: f = f0 ^ (x_i & (f0 ^ f1))\n`;
+                text += `Mapped: Y = ^_NET(${sop})`;
+            }
+            container.innerText = text;
+        }
+
+        function renderVerilogAndSchematic(vars, sop) {
+            const verilogElem = document.getElementById('verilogOutput');
+            const schematicContainer = document.getElementById('schematicContainer');
+            const tech = document.getElementById('techLibrary').value;
+
+            let verilog = `module logic_synthesis_unit (\n`;
+            verilog += `  input wire ${vars.join(', ')},\n`;
+            verilog += `  output wire Y\n);\n\n`;
+            verilog += `  assign Y = ${sop};\n\n`;
+            verilog += `endmodule`;
+            verilogElem.innerText = verilog;
+
+            renderSVGSchematic(schematicContainer, vars, tech, sop);
+        }
+
+        // ACCURATE 2-INPUT NAND GATE SCHEMATIC GENERATOR WITH COLOR-CODED WIRES & WHITE CANVAS
+        function renderSVGSchematic(container, vars, tech, sop) {
+            const terms = sop.split('|').map(t => t.replace(/[()]/g, '').trim()).filter(t => t && t !== '0' && t !== '1');
+            
+            if (sop === "0" || sop === "1") {
+                container.innerHTML = `<div style="padding: 20px; color: #0284c7;">Constant Output Y = ${sop}</div>`;
+                return;
+            }
+
+            let gateCount = 0;
+            const nodes = [];
+
+            function addNand2(in1, in2, label = "") {
+                gateCount++;
+                const id = `G${gateCount}`;
+                nodes.push({ id, type: '~&', in1, in2, label: label || `~&_${gateCount}` });
+                return id;
+            }
+
+            function addInverter(inSignal) {
+                return addNand2(inSignal, inSignal, "INV");
+            }
+
+            const termOutputs = terms.map(term => {
+                const literals = term.split('&').map(s => s.trim());
+                
+                const signals = literals.map(lit => {
+                    if (lit.startsWith('~')) {
+                        const baseVar = lit.replace('~', '');
+                        return addInverter(baseVar);
+                    }
+                    return lit;
+                });
+
+                function buildAndTree(sigList) {
+                    if (sigList.length === 1) return sigList[0];
+                    if (sigList.length === 2) {
+                        const nandOut = addNand2(sigList[0], sigList[1]);
+                        return addInverter(nandOut);
+                    }
+                    const half = Math.floor(sigList.length / 2);
+                    const left = buildAndTree(sigList.slice(0, half));
+                    const right = buildAndTree(sigList.slice(half));
+                    const nandOut = addNand2(left, right);
+                    return addInverter(nandOut);
+                }
+
+                const andTreeOut = buildAndTree(signals);
+                return addInverter(andTreeOut);
+            });
+
+            function buildOrStageNandTree(invTerms) {
+                if (invTerms.length === 1) return addInverter(invTerms[0]);
+                if (invTerms.length === 2) return addNand2(invTerms[0], invTerms[1], "~&_OUT");
+                const half = Math.floor(invTerms.length / 2);
+                const left = buildOrStageNandTree(invTerms.slice(0, half));
+                const right = buildOrStageNandTree(invTerms.slice(half));
+                return addNand2(left, right, "~&_OUT");
+            }
+
+            const finalOutNode = buildOrStageNandTree(termOutputs);
+
+            const width = 450;
+            const height = Math.max(180, nodes.length * 35);
+            
+            let svg = `<svg width="100%" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg" style="display:block; background:#ffffff;">`;
+
+            const drawNandGate = (x, y, label, color) => {
+                const path = `M ${x} ${y} L ${x+18} ${y} C ${x+32} ${y}, ${x+32} ${y+24}, ${x+18} ${y+24} L ${x} ${y+24} Z`;
+                const bubble = `<circle cx="${x+35}" cy="${y+12}" r="2.5" fill="#ffffff" stroke="${color}" stroke-width="1.5"/>`;
+                return `
+                    <g>
+                        <path d="${path}" fill="#ffffff" stroke="${color}" stroke-width="1.8" stroke-linejoin="round"/>
+                        ${bubble}
+                        <text x="${x+6}" y="${y-3}" fill="${color}" font-size="8" font-family="sans-serif" font-weight="bold">${label}</text>
+                    </g>
+                `;
+            };
+
+            const signalColors = {
+                'A': '#2563eb', // Blue
+                'B': '#d97706', // Amber
+                'C': '#dc2626', // Red
+                'D': '#059669', // Emerald
+                'E': '#7c3aed', // Purple
+            };
+
+            const wirePalette = ['#0284c7', '#059669', '#d97706', '#7c3aed', '#db2777', '#0284c7', '#ea580c'];
+
+            function getSignalColor(sig, idx) {
+                if (signalColors[sig]) return signalColors[sig];
+                return wirePalette[idx % wirePalette.length];
+            }
+
+            const inputYMap = {};
+            const inputSpacing = height / (vars.length + 1);
+            vars.forEach((v, idx) => {
+                const y = inputSpacing * (idx + 1);
+                inputYMap[v] = y;
+                const wireColor = getSignalColor(v, idx);
+                svg += `<text x="12" y="${y+4}" fill="${wireColor}" font-size="11" font-weight="bold" font-family="sans-serif">${v}</text>`;
+                svg += `<line x1="26" y1="${y}" x2="60" y2="${y}" stroke="${wireColor}" stroke-width="2"/>`;
+            });
+
+            const nodeYMap = {};
+            const nodeXMap = {};
+            const nodeSpacing = height / (nodes.length + 1);
+
+            nodes.forEach((node, idx) => {
+                const x = 80 + (idx % 4) * 75;
+                const y = nodeSpacing * (idx + 1) - 12;
+                nodeXMap[node.id] = x;
+                nodeYMap[node.id] = y + 12;
+
+                const isFinal = (node.id === finalOutNode);
+                const gateColor = isFinal ? '#9333ea' : '#16a34a';
+
+                svg += drawNandGate(x, y, node.label, gateColor);
+
+                [node.in1, node.in2].forEach((inSignal, inIdx) => {
+                    const targetY = y + (inIdx === 0 ? 6 : 18);
+                    let startX = 26, startY = targetY;
+
+                    if (inputYMap[inSignal] !== undefined) {
+                        startY = inputYMap[inSignal];
+                    } else if (nodeYMap[inSignal] !== undefined) {
+                        startX = nodeXMap[inSignal] + 38;
+                        startY = nodeYMap[inSignal];
+                    }
+
+                    let wireColor = '#64748b';
+                    if (inputYMap[inSignal] !== undefined) {
+                        wireColor = getSignalColor(inSignal, 0);
+                    } else {
+                        const sourceIdx = parseInt(inSignal.replace('G', '')) || 0;
+                        wireColor = getSignalColor(inSignal, sourceIdx);
+                    }
+
+                    svg += `<path d="M ${startX} ${startY} L ${x - 15} ${startY} L ${x - 15} ${targetY} L ${x} ${targetY}" fill="none" stroke="${wireColor}" stroke-width="1.8"/>`;
+                });
+            });
+
+            const lastX = nodeXMap[finalOutNode] + 38;
+            const lastY = nodeYMap[finalOutNode];
+            const outputColor = '#9333ea';
+
+            svg += `<line x1="${lastX}" y1="${lastY}" x2="${width - 30}" y2="${lastY}" stroke="${outputColor}" stroke-width="2.5"/>`;
+            svg += `<text x="${width - 22}" y="${lastY + 4}" fill="${outputColor}" font-size="13" font-weight="bold" font-family="sans-serif">Y</text>`;
+
+            svg += `</svg>`;
+            container.innerHTML = svg;
+        }
+
+        function toggleAIChat() {
+            const drawer = document.getElementById('aiChatDrawer');
+            drawer.style.display = (drawer.style.display === 'flex') ? 'none' : 'flex';
+        }
+
+        async function sendGeminiQuery() {
+            const inputField = document.getElementById('userChatInput');
+            const msgBox = document.getElementById('chatMessages');
+            const prompt = inputField.value.trim();
+
+            if (!prompt) return;
+
+            msgBox.innerHTML += `<div class="chat-msg user">${prompt}</div>`;
+            inputField.value = '';
+            msgBox.scrollTop = msgBox.scrollHeight;
+
+            const loadingId = `load-${Date.now()}`;
+            msgBox.innerHTML += `<div class="chat-msg ai" id="${loadingId}">Analyzing circuit state...</div>`;
+            msgBox.scrollTop = msgBox.scrollHeight;
+
+            const engineState = {
+                expression: document.getElementById('exprInput')?.value || '',
+                sop: document.getElementById('minimizedExpr')?.innerText || '',
+                verilog: document.getElementById('verilogOutput')?.innerText || ''
+            };
+
+            try {
+                const response = await fetch('/api/gemini', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userPrompt: prompt, engineState })
+                });
+
+                const data = await response.json();
+                const loadElem = document.getElementById(loadingId);
+                
+                if (data.reply) {
+                    loadElem.innerHTML = typeof marked !== 'undefined' ? marked.parse(data.reply) : data.reply;
+                } else if (data.error) {
+                    loadElem.innerText = `API Error: ${data.error}`;
+                } else {
+                    loadElem.innerText = "No response generated.";
+                }
+            } catch (err) {
+                const loadElem = document.getElementById(loadingId);
+                if (loadElem) loadElem.innerText = `Network Error: ${err.message}`;
+            }
+
+            msgBox.scrollTop = msgBox.scrollHeight;
+        }
+
+        // Init: Set up mode without throwing errors on empty initial expression
+        renderTTInputGrid();
+        renderKMapInputGrid();
+        setupDefaultCircuit();
+    </script>
+</body>
+</html>
