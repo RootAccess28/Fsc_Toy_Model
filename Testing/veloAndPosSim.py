@@ -11,14 +11,23 @@ def simulation():
         atoms_p=atoms_p+(atoms_v/100) 
         time.sleep(0.01) #updating positions every 10 ms
 
-p_main = thr.Thread(target=simulation) 
+def distance_sim():
+    while True:
+        global atoms_p, atoms_v, distance_matrix
+        distance_matrix = (np.sum(((atoms_p.reshape(3,1,12)-atoms_p.reshape(3,12,1))**2),axis=0))**(1/2) 
+        time.sleep(0.01)
+        #like a matrix which contains distances of all 12 atoms with each other pairwise
+
+p_main = thr.Thread(target=simulation)
+p_distance = thr.Thread(target=distance_sim)
 p_main.start() #threading the process so we can run two functions simaltaneously
+p_distance.start()
+    
 
 #you can remove the part below its just for testing if the positions are running correctly
 #someone please do a matplot for this code
-#t
 while True: 
-    print(atoms_p)
+    print(distance_matrix)
     time.sleep(1)
 
 
