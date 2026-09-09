@@ -29,5 +29,4 @@ p_distance.start()
 while True: 
     print(distance_matrix)
     time.sleep(1)
-#yes
 
