@@ -14,7 +14,9 @@ def simulation():
 p_main = thr.Thread(target=simulation) 
 p_main.start() #threading the process so we can run two functions simaltaneously
 
-while True:
+#you can remove the part below its just for testing if the positions are running correctly
+#someone please do a matplot for this code
+while True: 
     print(atoms_p)
     time.sleep(1)
 
