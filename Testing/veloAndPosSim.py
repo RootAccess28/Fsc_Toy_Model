@@ -6,12 +6,13 @@ from matplotlib.animation import FuncAnimation
 
 
 #treating everthing as m/s
-N=12
-L=10.0
-dt=0.01        # Creating a variable for storing the least count of time
-vel = np.random.uniform(low=-10, high=10, size=(12,3))    #the velocity array, we will modify this for simulating things
-pos = np.random.uniform(0.5, L - 0.5, size=(N, 3))
-radius=0.1
+N = 12
+L = 10.0
+dt = 0.01        # Creating a variable for storing the least count of time
+radius = 0.1
+vel = np.random.uniform(low=-100, high=100, size=(N,3))    #the velocity array, we will modify this for simulating things
+pos = np.random.uniform( radius + 0.1 , L - radius - 0.1, size=(N, 3))
+
 
 # def simulation():
 #     global atoms_p, atoms_v
@@ -47,7 +48,7 @@ def draw_cube_edges(ax, L):
 
 
 # Set up the 3D plot
-fig = plt.figure(figsize=(8, 8))
+fig = plt.figure(figsize=(10, 10))
 ax = fig.add_subplot(111, projection='3d')
 
 # Fixed bounds so the camera stays stable
@@ -65,11 +66,8 @@ ax.set_title('3D Particle Simulation')
 
 draw_cube_edges(ax,L)
 
-# Prevent distortion so the box is an exact cube
-ax.set_box_aspect([1, 1, 1])
-
 # Set a higher, wider initial camera angle (elevation, azimuth)
-ax.view_init(elev=25, azim=45)
+ax.view_init(elev=25, azim=45+20)
 
 # Initialize scatter plot
 scatter = ax.scatter(pos[:, 0], pos[:, 1], pos[:, 2], color='crimson', s=60, edgecolors='black')
@@ -82,7 +80,7 @@ def animate(frame):
     # Efficiently update 3D positions in-place
     scatter._offsets3d = (pos[:, 0], pos[:, 1], pos[:, 2])
 
-    ax.view_init(elev=20, azim=(45 + frame * 0.4) % 720)
+    # ax.view_init(elev=20, azim=(45 + frame * 0.4) % 720)
     return scatter,
 
 # interval=10 ms matches dt = 0.01s (100 FPS target)
