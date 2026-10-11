@@ -10,18 +10,24 @@ N = 12
 L = 10.0
 dt = 0.01        # Creating a variable for storing the least count of time
 radius = 0.1
-vel = np.random.uniform(low=-100, high=100, size=(N,3))    #the velocity array, we will modify this for simulating things
+vel = np.random.uniform(low=-100, high=100, size=(N,3))                 #the velocity array, we will modify this for simulating things
 pos = np.random.uniform( radius + 0.1 , L - radius - 0.1, size=(N, 3))
 
 
-# def simulation():
-#     global atoms_p, atoms_v
-#     while True:
-#         atoms_p+= atoms_v*dt 
-#         time.sleep(dt) #updating positions every 10 ms
+def distance_matrix():
+    a = pos.T[:, :, None]    # (3, N, 1)
+    b = pos.T[:, None, :]    # (3, 1, N)
+    return np.sqrt(np.sum((a - b)**2, axis=0))
 
-# p_main = thr.Thread(target=simulation) 
-# p_main.start() #threading the process so we can run two functions simaltaneously
+def test1():
+    global pos, vel, dt, L
+    while True:
+        print(distance_matrix())
+        pos, vel = update_physics(pos, vel, dt, L)
+        time.sleep(2)
+
+test = thr.Thread(target=test1, daemon=True)
+test.start()
 
 def update_physics(pos, vel, dt, L):
     pos += vel * dt
@@ -84,7 +90,7 @@ def animate(frame):
     return scatter,
 
 # interval=10 ms matches dt = 0.01s (100 FPS target)
-anim = FuncAnimation(fig, animate, frames=2000, interval=10, blit=False)
+anim = FuncAnimation(fig, animate, frames=2000, interval=1000*dt, blit=False)
 
 plt.show()
 
