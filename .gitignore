@@ -4,3 +4,4 @@ __pycache__/
 src/pairforce
 *.o
 .DS_Store
+.vscode
