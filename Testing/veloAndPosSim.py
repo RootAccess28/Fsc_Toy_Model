@@ -6,10 +6,10 @@ from matplotlib.animation import FuncAnimation
 
 
 #treating everthing as m/s
-N=12
-L=10.0
+N=3
+L=1.0
 dt=0.01        # Creating a variable for storing the least count of time
-vel = np.random.uniform(low=-10, high=10, size=(12,3))    #the velocity array, we will modify this for simulating things
+vel = np.random.uniform(low=-2, high=2, size=(N,3))    #the velocity array, we will modify this for simulating things
 pos = np.random.uniform(0.5, L - 0.5, size=(N, 3))
 radius=0.1
 
@@ -21,6 +21,8 @@ radius=0.1
 
 # p_main = thr.Thread(target=simulation) 
 # p_main.start() #threading the process so we can run two functions simaltaneously
+
+
 
 def update_physics(pos, vel, dt, L):
     pos += vel * dt
@@ -89,5 +91,3 @@ def animate(frame):
 anim = FuncAnimation(fig, animate, frames=2000, interval=10, blit=False)
 
 plt.show()
-
-

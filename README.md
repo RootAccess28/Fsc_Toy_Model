@@ -3,6 +3,7 @@
 A 2D particle simulation modeling atomic interactions inside a bounded box using classical mechanics, custom force computations, wall reflections, and energy tracking[cite: 1]. This repository includes Python, NumPy-vectorized, and compiled C implementations with comparative benchmarking[cite: 1].
 
 
+
 ## Project Structure
 
 ```text
