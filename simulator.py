@@ -4,13 +4,14 @@ from matplotlib.animation import FuncAnimation
 
 # Simulation parameters
 N = 16          # number of particles
-L = 10.0        # box side length
+L = 10.0        # box size
 dt = 0.01       # time step
-rc = 2.0        # cutoff radius
-k = 15.0        # spring constant
-r0 = 0.8        # rest length
+rc = 2.0        # cutoff distance
+k = 15.0        # spring stiffness
+r0 = 0.8        # preferred distance
+trail_len = 15  # number of tracer frames
 
-# Initial conditions
+# Initial particle setup
 np.random.seed(42)
 pos = np.random.uniform(1.0, L - 1.0, size=(N, 2))
 vel = np.random.uniform(-4.0, 4.0, size=(N, 2))
@@ -39,16 +40,8 @@ def walls_reflect(pos, vel, L):
         pos[hit_high, dim] = L
     return pos, vel
 
-def kinetic_energy(vel, mass):
-    return 0.5 * np.sum(mass[:, None] * vel**2)
-
-def potential_energy(pos, rc, k, r0):
-    _, dist, neighbors = pairwise_distances(pos, rc)
-    upper = np.triu(neighbors, k=1)
-    return 0.5 * k * np.sum((dist[upper] - r0)**2)
-
 def step(pos, vel, mass, dt, L):
-    # Velocity Verlet (smooth update)
+    # Velocity Verlet update
     F = pair_forces(pos, rc, k, r0)
     vel += 0.5 * (F / mass[:, None]) * dt
     pos += vel * dt
@@ -57,36 +50,45 @@ def step(pos, vel, mass, dt, L):
     vel += 0.5 * (F_new / mass[:, None]) * dt
     return pos, vel
 
-# --- Task 1 Numerical Checks ---
-d, dist, neighbors = pairwise_distances(pos, rc)
-F = pair_forces(pos, rc, k, r0)
-KE = kinetic_energy(vel, mass)
-PE = potential_energy(pos, rc, k, r0)
-
-print("--- Task 1 Numerical Checks ---")
-print("Distance matrix symmetric:", np.allclose(dist, dist.T))
-print("Diagonal distances zero:  ", np.allclose(np.diag(dist), 0))
-print("Any self-neighbors:       ", np.any(np.diag(neighbors)))
-print("Net internal force norm:  ", np.linalg.norm(np.sum(F, axis=0)))
-print(f"Energy: K = {KE:.2f}, U = {PE:.2f}, Total E = {KE + PE:.2f}")
-
-# --- Task 2 Matplotlib Animation ---
-fig, ax = plt.subplots(figsize=(6, 6))
+# Matplotlib setup
+fig, ax = plt.subplots(figsize=(7, 7))
 ax.set_xlim(-0.5, L + 0.5)
 ax.set_ylim(-0.5, L + 0.5)
 ax.set_aspect('equal')
-ax.set_title("Particle Simulation")
-ax.plot([0, L, L, 0, 0], [0, 0, L, L, 0], 'k-', lw=1.5)  # Box outline
+ax.set_title("Particle Simulation with Tracers")
 
-scatter = ax.scatter(pos[:, 0], pos[:, 1], c='crimson', s=90, edgecolors='k')
+# Draw box boundary
+ax.plot([0, L, L, 0, 0], [0, 0, L, L, 0], 'k-', lw=2)
+
+# Colors for each particle
+colors = plt.cm.tab20(np.linspace(0, 1, N))
+
+# Line objects for particle tracers
+trails = [ax.plot([], [], '-', color=colors[i], alpha=0.5, lw=1.5)[0] for i in range(N)]
+scatter = ax.scatter(pos[:, 0], pos[:, 1], c=colors, s=80, edgecolors='black', zorder=5)
+
+# History buffer to store past positions for tracers
+history = []
 
 def update(frame):
     global pos, vel
     pos, vel = step(pos, vel, mass, dt, L)
-    scatter.set_offsets(pos)
-    return scatter,
+    
+    # Store position history
+    history.append(pos.copy())
+    if len(history) > trail_len:
+        history.pop(0)
 
-anim = FuncAnimation(fig, update, frames=600, interval=20, blit=True)
+    # Update particle tracers
+    pts = np.array(history)
+    for i in range(N):
+        trails[i].set_data(pts[:, i, 0], pts[:, i, 1])
+
+    # Update particle positions
+    scatter.set_offsets(pos)
+    return [scatter] + trails
+
+anim = FuncAnimation(fig, update, frames=1000, interval=20, blit=True)
 
 if __name__ == "__main__":
     plt.show()
