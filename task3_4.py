@@ -2,7 +2,8 @@ import os
 from pathlib import Path
 import numpy as np
 import matplotlib
-matplotlib.use("Agg")  # Guarantees figures save cleanly without GUI popups blocking execution
+if __name__ == "__main__":
+    matplotlib.use("Agg")  # Guarantees figures save cleanly without GUI popups when run directly
 import matplotlib.pyplot as plt
 
 # =============================================================================
@@ -12,12 +13,13 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 TASK3_DIR = SCRIPT_DIR / "task_3 results"
 TASK4_DIR = SCRIPT_DIR / "task_4 results"
 
-TASK3_DIR.mkdir(parents=True, exist_ok=True)
-TASK4_DIR.mkdir(parents=True, exist_ok=True)
-
-print(f"Script location     : {SCRIPT_DIR}")
-print(f"Task 3 output folder: {TASK3_DIR}")
-print(f"Task 4 output folder: {TASK4_DIR}\n")
+def setup_output_directories(verbose=True):
+    TASK3_DIR.mkdir(parents=True, exist_ok=True)
+    TASK4_DIR.mkdir(parents=True, exist_ok=True)
+    if verbose:
+        print(f"Script location     : {SCRIPT_DIR}")
+        print(f"Task 3 output folder: {TASK3_DIR}")
+        print(f"Task 4 output folder: {TASK4_DIR}\n")
 
 # =============================================================================
 # 2. MODEL PARAMETERS (MATCHING REFERENCE PLOTS: E(0) ~ 77.9 FOR SEED 42)
@@ -30,11 +32,11 @@ r0 = 1.5            # Equilibrium distance = rc so U(rc) = 0 (continuous at cuto
 T_task3 = 10.0      # Total time t = 10 (matches reference plots)
 T_task4 = 30.0      # Total time for Task 4 dissipation study
 
-def init_state(seed=42, N=N, L=L):
+def init_state(seed=42, N=N, L=L, v_max=4.4, margin=0.8):
     """Initializes positions, velocities, and masses reproducibly for a given seed."""
     rng = np.random.default_rng(seed)
-    pos = rng.uniform(0.8, L - 0.8, size=(N, 2))
-    vel = rng.uniform(-4.4, 4.4, size=(N, 2))
+    pos = rng.uniform(margin, L - margin, size=(N, 2))
+    vel = rng.uniform(-v_max, v_max, size=(N, 2))
     mass = np.ones(N, dtype=np.float64)
     return pos, vel, mass
 
@@ -67,44 +69,66 @@ def potential_energy(pos, k=k, r0=r0, rc=rc):
     u_pair = 0.5 * k * ((dist - r0)**2) * neighbors
     return 0.5 * np.sum(u_pair)
 
-def walls_reflect(pos, vel, L=L):
+def walls_reflect(pos, vel, L=L, radius=0.0):
     for dim in range(2):
-        low = pos[:, dim] < 0.0
-        vel[low, dim] *= -1.0
-        pos[low, dim] = 0.0
+        low = pos[:, dim] < radius
+        vel[low, dim] = np.abs(vel[low, dim])
+        pos[low, dim] = radius
 
-        high = pos[:, dim] > L
-        vel[high, dim] *= -1.0
-        pos[high, dim] = L
+        high = pos[:, dim] > (L - radius)
+        vel[high, dim] = -np.abs(vel[high, dim])
+        pos[high, dim] = L - radius
+    return pos, vel
+
+def particle_collisions(pos, vel, radius=0.0):
+    """Elastic hard-core collision response for finite-size circular particles."""
+    if radius <= 0.0:
+        return pos, vel
+    N_p = len(pos)
+    min_dist = 2.0 * radius
+    for i in range(N_p):
+        for j in range(i + 1, N_p):
+            delta = pos[i] - pos[j]
+            dist = np.hypot(delta[0], delta[1])
+            if 0.0 < dist < min_dist:
+                n = delta / dist
+                overlap = min_dist - dist
+                pos[i] += 0.5 * overlap * n
+                pos[j] -= 0.5 * overlap * n
+                v_rel = vel[i] - vel[j]
+                vn = np.dot(v_rel, n)
+                if vn < 0.0:
+                    vel[i] -= vn * n
+                    vel[j] += vn * n
     return pos, vel
 
 # =============================================================================
 # 4. TIME INTEGRATORS: EULER (SIMPLE) AND VERLET (SMOOTH)
 # =============================================================================
-def step_euler(pos, vel, mass, dt, L=L, gamma=0.0):
+def step_euler(pos, vel, mass, dt, L=L, gamma=0.0, k=k, r0=r0, rc=rc, radius=0.0):
     """Simple update (Euler-Cromer / Forward Euler)."""
-    F = total_forces(pos, vel, gamma=gamma)
+    F = total_forces(pos, vel, gamma=gamma, k=k, r0=r0, rc=rc)
     acc = F / mass[:, None]
     pos_new = pos + vel * dt
     vel_new = vel + acc * dt
-    pos_new, vel_new = walls_reflect(pos_new, vel_new, L)
+    pos_new, vel_new = walls_reflect(pos_new, vel_new, L, radius=radius)
     return pos_new, vel_new
 
-def step_verlet(pos, vel, mass, dt, L=L, gamma=0.0, F_prev=None):
+def step_verlet(pos, vel, mass, dt, L=L, gamma=0.0, k=k, r0=r0, rc=rc, radius=0.0, F_prev=None):
     """Smooth update (Velocity Verlet)."""
     if F_prev is None:
-        F_prev = total_forces(pos, vel, gamma=gamma)
+        F_prev = total_forces(pos, vel, gamma=gamma, k=k, r0=r0, rc=rc)
     a_prev = F_prev / mass[:, None]
     vel_half = vel + 0.5 * a_prev * dt
     pos_new = pos + vel_half * dt
-    pos_new, vel_half = walls_reflect(pos_new, vel_half, L)
-    F_new = total_forces(pos_new, vel_half, gamma=gamma)
+    pos_new, vel_half = walls_reflect(pos_new, vel_half, L, radius=radius)
+    F_new = total_forces(pos_new, vel_half, gamma=gamma, k=k, r0=r0, rc=rc)
     a_new = F_new / mass[:, None]
     vel_new = vel_half + 0.5 * a_new * dt
     return pos_new, vel_new, F_new
 
-def run_sim(dt, T_max, method="verlet", seed=42, gamma=0.0, save_pos=False):
-    pos, vel, mass = init_state(seed=seed)
+def run_sim(dt, T_max, method="verlet", seed=42, gamma=0.0, k=k, r0=r0, rc=rc, L=L, N=N, radius=0.0, save_pos=False):
+    pos, vel, mass = init_state(seed=seed, N=N, L=L)
     n_steps = int(round(T_max / dt))
 
     t_arr = np.linspace(0.0, n_steps * dt, n_steps + 1)
@@ -115,7 +139,7 @@ def run_sim(dt, T_max, method="verlet", seed=42, gamma=0.0, save_pos=False):
     pos_hist = np.zeros((n_steps + 1, N, 2)) if save_pos else None
 
     K_arr[0] = kinetic_energy(vel, mass)
-    U_arr[0] = potential_energy(pos)
+    U_arr[0] = potential_energy(pos, k=k, r0=r0, rc=rc)
     E_arr[0] = K_arr[0] + U_arr[0]
     v_mean[0] = np.mean(np.linalg.norm(vel, axis=1))
     if save_pos:
@@ -124,12 +148,12 @@ def run_sim(dt, T_max, method="verlet", seed=42, gamma=0.0, save_pos=False):
     F_prev = None
     for s in range(1, n_steps + 1):
         if method == "euler":
-            pos, vel = step_euler(pos, vel, mass, dt, L=L, gamma=gamma)
+            pos, vel = step_euler(pos, vel, mass, dt, L=L, gamma=gamma, k=k, r0=r0, rc=rc, radius=radius)
         else:
-            pos, vel, F_prev = step_verlet(pos, vel, mass, dt, L=L, gamma=gamma, F_prev=F_prev)
+            pos, vel, F_prev = step_verlet(pos, vel, mass, dt, L=L, gamma=gamma, k=k, r0=r0, rc=rc, radius=radius, F_prev=F_prev)
 
         K_arr[s] = kinetic_energy(vel, mass)
-        U_arr[s] = potential_energy(pos)
+        U_arr[s] = potential_energy(pos, k=k, r0=r0, rc=rc)
         E_arr[s] = K_arr[s] + U_arr[s]
         v_mean[s] = np.mean(np.linalg.norm(vel, axis=1))
         if save_pos:
@@ -149,6 +173,7 @@ def run_sim(dt, T_max, method="verlet", seed=42, gamma=0.0, save_pos=False):
 # 5. TASK 3 EXPERIMENTS & EXACT PLOTS
 # =============================================================================
 def execute_task_3():
+    setup_output_directories(verbose=True)
     dts = [0.05, 0.02, 0.01, 0.005, 0.002, 0.001]
     seeds = [42, 43, 44, 45, 46, 47, 48, 49, 50, 51]
 
@@ -312,6 +337,7 @@ def find_relaxation_times(t, E, v_mean, dt, window=2.0, tol_E=1e-3, tol_v=1e-3):
     return t_v, t_E
 
 def execute_task_4():
+    setup_output_directories(verbose=True)
     gammas = [0.0, 0.05, 0.1, 0.5]
     dt_task4 = 0.005
     diss_results = {}
