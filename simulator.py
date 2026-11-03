@@ -14,7 +14,7 @@ trail_len = 22    # tracer trail length to see path deflections
 # Initial setup: random non-overlapping positions and velocities
 np.random.seed(42)
 pos = np.random.uniform(radius + 1.0, L - radius - 1.0, size=(N, 2))
-vel = np.random.uniform(-3.5, 3.5, size=(N, 2))
+vel = np.random.uniform(-7, 7, size=(N, 2))
 mass = np.ones(N)
 
 def pair_repulsion(pos, rc, k):
