@@ -1,0 +1,9 @@
+IMPORTANT: SUPERSEDES THE PREVIOUS TASK 6 PACKAGE
+
+The earlier standalone Task 6 C wrapper passed arguments in the order
+(k, r0, rc), while the team's uploaded pairforce.c function expects
+(rc, r0, k). That made the earlier C benchmark invalid.
+
+Use this revised package only. The revised C wrapper passes (rc, r0, k),
+checks force-array agreement before timing, and uses the uploaded task3_4.py
+parameters (k=15.0, r0=1.5, rc=1.5).
