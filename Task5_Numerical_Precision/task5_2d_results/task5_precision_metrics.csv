@@ -1,0 +1,3 @@
+precision,bytes_per_float,state_bytes,pairwise_bytes,tracked_total_bytes,saved_position_history_bytes,tracked_plus_position_history_bytes,median_runtime_seconds,E_initial,E_final,max_relative_energy_drift,epsilon_pos_final_vs_float64,epsilon_pos_max_vs_float64
+float32,4,336,1872,2208,192096,194304,0.2833265420003954,79.94480895996094,82.7070541381836,0.03455190167013948,0.706033895093874,0.7422959749725103
+float64,8,672,3600,4272,384192,388464,0.28716116600026,79.94473997377017,80.17657682411743,0.012253586961929672,0.0,0.0

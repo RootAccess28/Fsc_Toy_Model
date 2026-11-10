@@ -34,7 +34,7 @@ void compute_pair_forces(int N,
             const double dist = sqrt(dx * dx + dy * dy);
 
             if (dist > eps && dist <= rc) {
-                const double factor = -k * (dist - r0) / (dist + eps);
+                const double factor = -k * (dist - r0) / dist;
                 const double fx = factor * dx;
                 const double fy = factor * dy;
 

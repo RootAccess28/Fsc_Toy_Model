@@ -1,10 +1,10 @@
 TASK 6 BENCHMARK ENVIRONMENT
-Timestamp: 2026-11-09T12:08:13+05:30
-OS: Windows-11-10.0.26300-SP0
-Processor: Intel64 Family 6 Model 197 Stepping 2, GenuineIntel
-Python: 3.14.7 (tags/v3.14.7:823f032, Aug  5 2026, 10:51:32) [MSC v.1944 64 bit (AMD64)]
+Timestamp: 2026-11-10T09:42:42+05:30
+OS: macOS-27.2-arm64-arm-64bit-Mach-O
+Processor: arm
+Python: 3.14.7 (main, Aug  5 2026, 10:29:49) [Clang 21.0.0 (clang-2100.1.1.101)]
 NumPy: 2.5.4
-Compiler: gcc.EXE (Rev5, Built by MSYS2 project) 16.1.0
+Compiler: Apple clang version 21.0.0 (clang-2100.3.34.2)
 Compiler flags: -O2 shared library
 N sizes: [50, 200, 500, 1000]
 Samples per method per N: 5

@@ -88,6 +88,8 @@ DEFAULT_CONFIG = {
     "v_max": 10.0,            # Maximum initial particle speed component per axis (energetic & fast)
     "frames": 1000,           # Maximum animation frames to render
     "hard_core": False,       # Pure continuous physics (False) vs geometric overlap separation (True)
+    "backend": "numpy",       # Physics force engine: 'numpy' (vectorized) or 'c' (compiled pairforce.c)
+    "dynamic_squish": True,   # Dynamic elastic ball contraction during collisions (squish & rebound)
 }
 
 # Exposed top-level aliases for direct, convenient access
@@ -106,18 +108,9 @@ DEFAULT_V_MAX = DEFAULT_CONFIG["v_max"]
 DEFAULT_PRESET = DEFAULT_CONFIG["preset"]
 
 # =============================================================================
-# 1. CORE PHYSICS & INTEGRATOR ENGINE (IMPORTED DIRECTLY FROM TASK MODULE)
+# 1. CORE PHYSICS & TASK 1 VERIFICATION IMPORTS
 # =============================================================================
-# The actual mathematical formulas, Hookean spring pair forces, viscous drag,
-# energy evaluations, and numerical time integrators (Euler and Velocity Verlet)
-# are implemented natively inside task3_4.py. This preserves complete code
-# ownership for the task developers when presenting their equations and code.
-#
-# simulator.py acts as the Master Visualizer, Dual-Panel GUI, and Controller,
-# importing these physics kernels directly from task3_4.py.
-# =============================================================================
-
-from task3_4 import (
+from core.physics import (
     pairwise_distances,
     pair_forces,
     total_forces,
@@ -129,215 +122,9 @@ from task3_4 import (
     step_verlet,
     init_state,
     run_sim,
-    execute_task_3,
-    execute_task_4,
 )
-
-
-# =============================================================================
-# 3. TASK 1 NUMERICAL VERIFICATION SUITE (--verify)
-# =============================================================================
-
-def verify_task1(verbose=True):
-    """
-    Executes comprehensive numerical verification of Task 1 requirements:
-    1. Memory layout & array strides (dtype, itemsize, nbytes, strides; float64 vs float32 comparison for N=100,000).
-    2. Distance matrix symmetry (||D - D^T||_max = 0).
-    3. Distance zero diagonal (max(diag(D)) = 0).
-    4. Self-neighbor exclusion (diag(neighbors) == False).
-    5. Hand-built 4-particle analytic check against exact Pythagorean distances.
-    6. Neighbor count & cutoff scaling across multiple rc.
-    7. Newton's Third Law (equal & opposite forces, sum(F) ~ 0).
-    8. Box boundary containment & wall reflections.
-    9. Energy positivity & initial values consistency.
-    """
-    checks = []
-
-    print("=" * 86)
-    print("TASK 1: NUMERICAL VERIFICATION & FOUNDATIONAL PHYSICS EVIDENCE")
-    print("=" * 86)
-
-    # --- Check 1: Memory Layout & N=100k Calculation ---
-    pos_sample = np.zeros((12, 2), dtype=np.float64)
-    pos_sample32 = pos_sample.astype(np.float32)
-
-    N_large = 100000
-    pos64_large = np.zeros((N_large, 2), dtype=np.float64)
-    pos32_large = np.zeros((N_large, 2), dtype=np.float32)
-
-    bytes_64_actual = pos64_large.nbytes
-    bytes_32_actual = pos32_large.nbytes
-
-    sizeof_double = 8  # standard C sizeof(double)
-    sizeof_float = 4   # standard C sizeof(float)
-    bytes_64_hand = N_large * 2 * sizeof_double
-    bytes_32_hand = N_large * 2 * sizeof_float
-
-    mem_match = (bytes_64_actual == bytes_64_hand) and (bytes_32_actual == bytes_32_hand)
-    checks.append(("Memory layout & N=100k strides (float64: 1.6MB, float32: 0.8MB)", mem_match))
-
-    if verbose:
-        print("[1] MEMORY & STRIDE INSPECTION:")
-        print(f"    - Sample pos shape: {pos_sample.shape}, dtype: {pos_sample.dtype}")
-        print(f"    - itemsize: {pos_sample.itemsize} bytes, strides: {pos_sample.strides}, nbytes: {pos_sample.nbytes} bytes")
-        print(f"    - float32 itemsize: {pos_sample32.itemsize} bytes, nbytes: {pos_sample32.nbytes} bytes")
-        print(f"    - N=100,000 particles memory:")
-        print(f"        float64 actual = {bytes_64_actual:,} B ({bytes_64_actual/1e6:.2f} MB) | by-hand = {bytes_64_hand:,} B")
-        print(f"        float32 actual = {bytes_32_actual:,} B ({bytes_32_actual/1e6:.2f} MB) | by-hand = {bytes_32_hand:,} B")
-        print(f"    -> Result: {'PASS' if mem_match else 'FAIL'}\n")
-
-    # --- Check 2, 3, 4: Distance Matrix Properties ---
-    rng = np.random.default_rng(101)
-    pos_test = rng.uniform(0.0, 10.0, size=(25, 2))
-    rc_test = 2.5
-    d_mat, dist_mat, neigh_mat = pairwise_distances(pos_test, rc=rc_test)
-
-    sym_diff = float(np.max(np.abs(dist_mat - dist_mat.T)))
-    pass_sym = (sym_diff < 1e-14)
-    checks.append(("Distance matrix symmetry (||D - D^T||_max < 1e-14)", pass_sym))
-
-    diag_max = float(np.max(np.abs(np.diag(dist_mat))))
-    pass_diag = (diag_max == 0.0)
-    checks.append(("Distance matrix zero diagonal (max(diag(D)) == 0)", pass_diag))
-
-    pass_self = not np.any(np.diag(neigh_mat))
-    checks.append(("Self-neighbor exclusion (diag(neighbors) == False)", pass_self))
-
-    if verbose:
-        print("[2] DISTANCE MATRIX PROPERTIES (N=25 random particles):")
-        print(f"    - Distance symmetry residual ||D - D^T||_inf : {sym_diff:.3e} -> {'PASS' if pass_sym else 'FAIL'}")
-        print(f"    - Zero diagonal max value                     : {diag_max:.3e} -> {'PASS' if pass_diag else 'FAIL'}")
-        print(f"    - Self-neighbor exclusion (any diagonal True): {np.any(np.diag(neigh_mat))} -> {'PASS' if pass_self else 'FAIL'}\n")
-
-    # --- Check 5: Hand-built 4-particle Exact Analytic Verification ---
-    # Particle 0: (0, 0)
-    # Particle 1: (1, 0) -> dist = 1.0
-    # Particle 2: (0, 2) -> dist = 2.0 to 0; dist = sqrt(1+4) = sqrt(5) to 1
-    # Particle 3: (4, 4) -> dist = sqrt(32) to 0; dist = 5.0 to 1; dist = sqrt(20) to 2
-    pos_4 = np.array([
-        [0.0, 0.0],
-        [1.0, 0.0],
-        [0.0, 2.0],
-        [4.0, 4.0]
-    ])
-    dist_exact = np.array([
-        [0.0,           1.0,           2.0,           np.sqrt(32.0)],
-        [1.0,           0.0,           np.sqrt(5.0),  5.0],
-        [2.0,           np.sqrt(5.0),  0.0,           np.sqrt(20.0)],
-        [np.sqrt(32.0), 5.0,           np.sqrt(20.0), 0.0]
-    ])
-    _, dist_calc, neigh_4 = pairwise_distances(pos_4, rc=2.1)
-    pass_analytic = bool(np.allclose(dist_calc, dist_exact, atol=1e-14))
-    checks.append(("Hand-built 4-particle exact Pythagorean distances", pass_analytic))
-
-    # Neighbor check for rc = 2.1:
-    # 0 has neighbors {1, 2} (dists 1.0, 2.0 <= 2.1; dist 5.66 > 2.1) -> 2 neighbors
-    # 1 has neighbors {0} (dist 1.0; dist 2.236 > 2.1) -> 1 neighbor
-    # 2 has neighbors {0} (dist 2.0; dist 2.236 > 2.1) -> 1 neighbor
-    # 3 has neighbors {} -> 0 neighbors
-    counts_calc = np.sum(neigh_4, axis=1).tolist()
-    counts_expected = [2, 1, 1, 0]
-    pass_counts = (counts_calc == counts_expected)
-    checks.append(("Hand-built 4-particle neighbor counts (rc=2.1 -> [2, 1, 1, 0])", pass_counts))
-
-    if verbose:
-        print("[3] HAND-BUILT 4-PARTICLE ANALYTIC BENCHMARK:")
-        print(f"    - Analytic distance match residual: {np.max(np.abs(dist_calc - dist_exact)):.3e} -> {'PASS' if pass_analytic else 'FAIL'}")
-        print(f"    - Calculated neighbor counts      : {counts_calc} (Expected: {counts_expected}) -> {'PASS' if pass_counts else 'FAIL'}\n")
-
-    # --- Check 6: Cutoff Scaling on Random Ensemble ---
-    pos_50 = rng.uniform(0.0, 10.0, size=(50, 2))
-    rc_list = [1.0, 1.5, 2.0, 3.0]
-    avg_neighbors = []
-    for rc_val in rc_list:
-        _, _, n_mat = pairwise_distances(pos_50, rc=rc_val)
-        avg_neighbors.append(float(np.mean(np.sum(n_mat, axis=1))))
-
-    # Monotonically increasing check
-    pass_monotonic = all(avg_neighbors[i] < avg_neighbors[i+1] for i in range(len(avg_neighbors)-1))
-    checks.append(("Cutoff scaling monotonic increase on N=50 ensemble", pass_monotonic))
-
-    if verbose:
-        print("[4] CUTOFF SCALING ENSEMBLE (N=50 particles in L=10 box):")
-        for rc_val, avg_n in zip(rc_list, avg_neighbors):
-            print(f"    - rc = {rc_val:<4.1f} -> Average neighbors per particle = {avg_n:<6.2f}")
-        print(f"    -> Monotonic growth check: {'PASS' if pass_monotonic else 'FAIL'}\n")
-
-    # --- Check 7: Newton's Third Law (Net Force Sum ~ 0) ---
-    F_pair = pair_forces(pos_test, k=15.0, r0=1.5, rc=2.5)
-    net_F = np.sum(F_pair, axis=0)
-    net_F_norm = float(np.linalg.norm(net_F))
-    pass_newton = (net_F_norm < 1e-12)
-    checks.append(("Newton's Third Law / Momentum conservation (||sum(F)|| < 1e-12)", pass_newton))
-
-    if verbose:
-        print("[5] NEWTON'S THIRD LAW / PAIR FORCE BALANCE:")
-        print(f"    - Net force vector sum(F): [{net_F[0]:+.3e}, {net_F[1]:+.3e}]")
-        print(f"    - Net force Euclidean norm: {net_F_norm:.3e} -> {'PASS' if pass_newton else 'FAIL'}\n")
-
-    # --- Check 8: Wall Reflection and Containment ---
-    # Particles positioned deliberately beyond all 4 boundaries with outward velocities:
-    pos_outside = np.array([
-        [-0.5, 5.0],    # Left wall
-        [10.5, 5.0],    # Right wall
-        [5.0, -0.5],    # Bottom wall
-        [5.0, 10.5]     # Top wall
-    ])
-    vel_outward = np.array([
-        [-3.0, 0.0],
-        [3.0, 0.0],
-        [0.0, -3.0],
-        [0.0, 3.0]
-    ])
-    pos_refl, vel_refl = walls_reflect(pos_outside, vel_outward, L=10.0, radius=0.2)
-
-    contained_x = (pos_refl[:, 0] >= 0.2) & (pos_refl[:, 0] <= 9.8)
-    contained_y = (pos_refl[:, 1] >= 0.2) & (pos_refl[:, 1] <= 9.8)
-    vel_inward_x = (vel_refl[0, 0] > 0.0) and (vel_refl[1, 0] < 0.0)
-    vel_inward_y = (vel_refl[2, 1] > 0.0) and (vel_refl[3, 1] < 0.0)
-
-    pass_walls = bool(np.all(contained_x) and np.all(contained_y) and vel_inward_x and vel_inward_y)
-    checks.append(("Wall reflection & boundary containment (radius=0.2, L=10)", pass_walls))
-
-    if verbose:
-        print("[6] WALL REFLECTION & BOUNDARY CLAMPING:")
-        print(f"    - Outward positions reflected to: \n{np.array2string(pos_refl, prefix='        ')}")
-        print(f"    - Reversed inward velocities:     \n{np.array2string(vel_refl, prefix='        ')}")
-        print(f"    -> All particles contained within [0.2, 9.8] with inward velocity: {'PASS' if pass_walls else 'FAIL'}\n")
-
-    # --- Check 9: Energy Positivity & Seed 42 Reference ---
-    pos_init, vel_init, mass_init = init_state(seed=42, N=12, L=10.0)
-    K0 = kinetic_energy(vel_init, mass_init)
-    U0 = potential_energy(pos_init, k=15.0, r0=1.5, rc=1.5)
-    E0 = K0 + U0
-
-    pass_energy = (K0 > 0) and (U0 >= 0) and abs(E0 - 77.1426) < 0.01
-    checks.append(("Energy positivity & seed 42 baseline (E(0) ~ 77.14 J)", pass_energy))
-
-    if verbose:
-        print("[7] ENERGY POSITIVITY & INITIAL REPRODUCIBILITY (seed 42):")
-        print(f"    - Kinetic Energy   K(0) = {K0:.4f} J")
-        print(f"    - Potential Energy U(0) = {U0:.4f} J")
-        print(f"    - Total Energy     E(0) = {E0:.4f} J (Target: 77.1426 J)")
-        print(f"    -> Consistency check: {'PASS' if pass_energy else 'FAIL'}\n")
-
-    # --- Summary Table ---
-    print("-" * 86)
-    print(f"{'Check Description':<68} | {'Status':<12}")
-    print("-" * 86)
-    all_passed = True
-    for desc, status in checks:
-        if not status:
-            all_passed = False
-        print(f"{desc:<68} | {'[ PASS ]' if status else '[ FAIL ]':<12}")
-    print("-" * 86)
-    passed_count = sum(1 for _, s in checks if s)
-    total_count = len(checks)
-    print(f"VERIFICATION SUMMARY: {passed_count}/{total_count} CHECKS PASSED ({passed_count/total_count*100:.1f}%)")
-    print("=" * 86 + "\n")
-
-    return all_passed
-
+from core.c_kernel import get_c_pair_forces_fn
+from Task1_Verification.task1_verification import verify_task1, run_task_1
 
 # =============================================================================
 # 4. LIVE VISUAL SIMULATION WITH REAL-TIME ENERGY TRACKING (TASK 2)
@@ -407,6 +194,8 @@ def run_live_simulation(
     hard_core=None,
     v_max=None,
     substeps=None,
+    backend=None,
+    dynamic_squish=None,
 ):
     """
     Launches side-by-side real-time interactive simulation:
@@ -436,6 +225,22 @@ def run_live_simulation(
     v_max = float(v_max if v_max is not None else p_cfg.get("v_max", DEFAULT_CONFIG.get("v_max", 10.0)))
     hard_core = bool(hard_core if hard_core is not None else p_cfg.get("hard_core", DEFAULT_CONFIG.get("hard_core", False)))
     substeps = int(substeps if substeps is not None else p_cfg.get("substeps", DEFAULT_CONFIG.get("substeps", 8)))
+    backend = str(backend if backend is not None else p_cfg.get("backend", DEFAULT_CONFIG.get("backend", "numpy"))).lower()
+    dynamic_squish = bool(dynamic_squish if dynamic_squish is not None else p_cfg.get("dynamic_squish", DEFAULT_CONFIG.get("dynamic_squish", True)))
+
+    # Force calculation backend selection (NumPy vs Compiled C via pairforce.c)
+    pair_force_fn = None
+    if backend == "c":
+        try:
+            pair_force_fn = get_c_pair_forces_fn()
+            backend_label = "COMPILED C (pairforce.c) [~30x Faster]"
+        except Exception as e:
+            print(f"[BACKEND WARNING] Could not load C kernel ({e}), falling back to NumPy.")
+            backend = "numpy"
+            backend_label = "NUMPY (vectorized)"
+            pair_force_fn = None
+    else:
+        backend_label = "NUMPY (vectorized)"
 
     # Synchronize physical spring distance (r0, rc) and visual particle radius (R):
     # Two spherical balls of radius R make physical contact when center distance d = 2 * R.
@@ -462,6 +267,7 @@ def run_live_simulation(
     print("=" * 80)
     print(f"Parameters: N={N}, L={L}, dt={dt}, gamma={gamma}, k={k}, r0={r0}, rc={rc}")
     print(f"Integrator: {method.upper()} | Radius: {radius} | Trail Len: {trail_len} | Substeps: {substeps} | Seed: {seed}")
+    print(f"Engine    : {backend_label} | Elastic Squish: {'ON (Contracts on Collision)' if dynamic_squish else 'OFF'}")
     print("Close the simulation window to finish.")
     print("=" * 80 + "\n")
 
@@ -544,7 +350,8 @@ def run_live_simulation(
                 p_new, v_new = step_euler(pos, vel, mass, dt, L=L, gamma=gamma, k=k, r0=r0, rc=rc, radius=radius)
             else:
                 p_new, v_new, F_new = step_verlet(
-                    pos, vel, mass, dt, L=L, gamma=gamma, k=k, r0=r0, rc=rc, radius=radius, F_prev=F_prev[0]
+                    pos, vel, mass, dt, L=L, gamma=gamma, k=k, r0=r0, rc=rc, radius=radius,
+                    F_prev=F_prev[0], pair_force_fn=pair_force_fn
                 )
                 F_prev[0] = F_new
 
@@ -580,10 +387,7 @@ def run_live_simulation(
             for i in range(N):
                 trails[i].set_data([], [])
 
-        for i in range(N):
-            circles[i].center = (pos[i, 0], pos[i, 1])
-
-        # Active collision spring indicators: render line connecting centers of balls in contact (r <= r0)
+        # Active collision spring indicators & Dynamic elastic ball contraction (squish & rebound)
         _, dist_mat, neigh_mat = pairwise_distances(pos, rc=r0)
         contact_pairs = []
         for i in range(N):
@@ -591,6 +395,28 @@ def run_live_simulation(
                 if neigh_mat[i, j]:
                     contact_pairs.append([pos[i], pos[j]])
         spring_lines.set_segments(contact_pairs)
+
+        if dynamic_squish:
+            # Inter-particle compressive deformation (r0 - dist)
+            pair_comp = np.where(neigh_mat, r0 - dist_mat, 0.0)
+            max_pair_comp = np.max(pair_comp, axis=1) if N > 1 else np.zeros(N)
+
+            # Wall collision compressive deformation
+            wall_comp_x = np.maximum(0.0, np.maximum(draw_radius - pos[:, 0], pos[:, 0] - (L - draw_radius)))
+            wall_comp_y = np.maximum(0.0, np.maximum(draw_radius - pos[:, 1], pos[:, 1] - (L - draw_radius)))
+            max_wall_comp = np.maximum(wall_comp_x, wall_comp_y)
+
+            total_comp = np.maximum(max_pair_comp, max_wall_comp)
+            alpha_squish = 0.35
+            r_min = 0.65 * draw_radius
+            dyn_radii = np.maximum(r_min, draw_radius - alpha_squish * total_comp)
+
+            for i in range(N):
+                circles[i].center = (pos[i, 0], pos[i, 1])
+                circles[i].set_radius(dyn_radii[i])
+        else:
+            for i in range(N):
+                circles[i].center = (pos[i, 0], pos[i, 1])
 
         # Update energy curves
         line_K.set_data(t_hist, K_hist)
@@ -646,329 +472,98 @@ def run_live_simulation(
 
 
 # =============================================================================
-# 5. TASK COMMAND DISPATCHERS (TASKS 1, 3, 4)
+# 5. TASK COMMAND DISPATCHERS (TASKS 1 - 7)
 # =============================================================================
 
 def run_task1():
-    """
-    Execute Task 1 numerical verification suite:
-    Memory layout, strides, symmetry, energy conservation, and momentum conservation.
-    Returns True if all tests pass.
-    """
-    return verify_task1(verbose=True)
+    """Execute Task 1 numerical verification suite."""
+    from Task1_Verification.task1_verification import run_task_1
+    return run_task_1(headless=True)
 
 
 def run_task3():
-    """
-    Execute Task 3 numerical experiments:
-    Timestep scan (dt in [0.05, 0.02, 0.01, 0.005, 0.002, 0.001]),
-    Euler vs Velocity Verlet energy drift, convergence order,
-    and 10-seed ensemble statistics.
-    Saves CSV table and high-resolution figures in 'task_3 results/'.
-    """
-    try:
-        from task3_4 import execute_task_3
-    except ImportError as e:
-        print(f"[ERROR] Could not import execute_task_3 from task3_4: {e}")
-        sys.exit(1)
-    execute_task_3()
+    """Execute Task 3 numerical experiments: Timestep accuracy & energy drift."""
+    from Task3_Timestep_Accuracy.task3_accuracy import execute_task_3
+    return execute_task_3()
 
 
 def run_task4():
-    """
-    Execute Task 4 numerical experiments:
-    Viscous damping scan (gamma in [0.0, 0.05, 0.1, 0.5]),
-    Dissipation of kinetic and total energy, relaxation times to mechanical equilibrium,
-    and particle trajectory comparison.
-    Saves CSV table and high-resolution figures in 'task_4 results/'.
-    """
-    try:
-        from task3_4 import execute_task_4
-    except ImportError as e:
-        print(f"[ERROR] Could not import execute_task_4 from task3_4: {e}")
-        sys.exit(1)
-    execute_task_4()
+    """Execute Task 4 numerical experiments: Viscous dissipation & equilibrium relaxation."""
+    from Task4_Viscous_Dissipation.task4_dissipation import execute_task_4
+    return execute_task_4()
+
+
+def run_task5():
+    """Execute Task 5: float32 vs float64 precision study."""
+    from Task5_Numerical_Precision.task5_precision_2d import run_task_5
+    return run_task_5()
+
+
+def run_task6():
+    """Execute Task 6: Pair-force computational efficiency benchmark (Python vs NumPy vs C)."""
+    from Task6_Computational_Efficiency.task6_benchmark import run_task_6
+    return run_task_6()
+
+
+def run_task7():
+    """Execute Task 7: 2D & 3D displacement tensor memory and OOM scalability analysis."""
+    from Task7_Memory_Scalability.task7_memory import run_task_7
+    return run_task_7()
 
 
 def run_all_tasks():
     """
-    Execute Tasks 1, 3, and 4 in an automated sequential batch.
+    Execute Tasks 1, 3, 4, 5, 6, and 7 in an automated sequential batch.
     """
     print("=" * 86)
-    print("UNIFIED COMMAND CENTER: RUNNING ALL EXPERIMENTAL & VERIFICATION TASKS (1, 3, 4)")
+    print("UNIFIED COMMAND CENTER: RUNNING ALL EXPERIMENTAL & VERIFICATION TASKS (1, 3, 4, 5, 6, 7)")
     print("=" * 86)
 
-    print("\n>>> [STEP 1/3] EXECUTING TASK 1: NUMERICAL VERIFICATION SUITE\n")
+    print("\n>>> [STEP 1/6] EXECUTING TASK 1: NUMERICAL VERIFICATION SUITE\n")
     success1 = run_task1()
     if not success1:
         print("\n[ABORT] Task 1 verification suite failed! Stopping sequence.")
         sys.exit(1)
 
-    print("\n>>> [STEP 2/3] EXECUTING TASK 3: TIMESTEP ACCURACY & ENERGY CONSERVATION\n")
+    print("\n>>> [STEP 2/6] EXECUTING TASK 3: TIMESTEP ACCURACY & ENERGY CONSERVATION\n")
     run_task3()
 
-    print("\n>>> [STEP 3/3] EXECUTING TASK 4: VISCOUS DISSIPATION & EQUILIBRIUM RELAXATION\n")
+    print("\n>>> [STEP 3/6] EXECUTING TASK 4: VISCOUS DISSIPATION & EQUILIBRIUM RELAXATION\n")
     run_task4()
 
+    print("\n>>> [STEP 4/6] EXECUTING TASK 5: NUMERICAL PRECISION (FLOAT32 VS FLOAT64)\n")
+    run_task5()
+
+    print("\n>>> [STEP 5/6] EXECUTING TASK 6: EFFICIENCY BENCHMARK (PYTHON VS NUMPY VS C)\n")
+    run_task6()
+
+    print("\n>>> [STEP 6/6] EXECUTING TASK 7: DISPLACEMENT TENSOR MEMORY SCALING & OOM ANALYSIS\n")
+    run_task7()
+
     print("\n" + "=" * 86)
-    print("ALL EXPERIMENTAL TASKS (1, 3, 4) COMPLETED SUCCESSFULLY!")
+    print("ALL EXPERIMENTAL TASKS (1, 3, 4, 5, 6, 7) COMPLETED SUCCESSFULLY!")
     print("=" * 86)
 
 
 # =============================================================================
-# 6. DEVELOPER HANDOVER & ARCHITECTURAL ROADMAP FOR TASKS 5, 6, 7, 8, AND 9
+# 6. ARCHITECTURAL OVERVIEW & TASK MODULE ROADMAP
 # =============================================================================
 """
-DEVELOPER HANDOVER & IMPLEMENTATION SPECIFICATION
-=================================================
-This section serves as the definitive engineering blueprint and implementation
-guide for subsequent developers / AI agents implementing Tasks 5 through 9.
-
-All functions in this file (simulator.py) have been structured as pure, modular,
-vectorized components ready for immediate benchmarking, extension, and compilation.
-
--------------------------------------------------------------------------------
-TASK 5: NUMERICAL PRECISION STUDY (FLOAT32 VS FLOAT64)
--------------------------------------------------------------------------------
-Objective:
-    Quantify floating-point precision effects on memory usage, energy conservation,
-    and chaotic trajectory divergence (Lyapunov sensitivity).
-
-Key Metrics & Mathematical Formulas:
-    1. Memory Footprint:
-       - float64: itemsize = 8 bytes per scalar (64 bits).
-       - float32: itemsize = 4 bytes per scalar (32 bits, exactly 50% reduction).
-       - State vector memory: M = 2 * N * itemsize bytes for pos and vel.
-    2. Energy Drift:
-       epsilon_E(t) = |E(t) - E(0)| / E(0)
-    3. Trajectory Divergence (Relative Coordinate Difference):
-       epsilon_pos(t) = ||x_32(t) - x_64(t)||_F / ||x_64(t)||_F
-       where ||.||_F is the Frobenius norm across all N particles and 2 dimensions:
-           ||Delta||_F = sqrt( sum_{i=1}^N sum_{d=1}^2 (x_{i,d}^(32) - x_{i,d}^(64))^2 )
-
-Step-by-Step Implementation Guide for Task 5:
-    1. Generate reference initial condition in float64 using:
-           pos64, vel64, mass64 = init_state(seed=42, N=12, L=10.0)
-    2. Clone and cast state to np.float32:
-           pos32 = pos64.astype(np.float32)
-           vel32 = vel64.astype(np.float32)
-           mass32 = mass64.astype(np.float32)
-    3. Time Integration:
-       Integrate both systems using step_verlet() for T = 10.0 s with dt = 0.005 s.
-       CRITICAL: For the float32 run, pass parameters cast to float32:
-           k_32 = np.float32(15.0); r0_32 = np.float32(1.5); rc_32 = np.float32(1.5)
-           dt_32 = np.float32(0.005); L_32 = np.float32(10.0)
-       This ensures NumPy maintains pure float32 arithmetic without promoting to float64.
-    4. At each step t_n:
-       - Compute E_64(t_n) and E_32(t_n).
-       - Compute relative trajectory divergence:
-             eps_pos = np.linalg.norm(pos32 - pos64) / np.linalg.norm(pos64)
-    5. Expected Scientific Observations:
-       - Collision dynamics in N-body systems are chaotic with positive Lyapunov exponents.
-       - Roundoff errors in float32 (~1e-7 relative machine epsilon) compound at every
-         inter-particle bounce, causing exponential growth of epsilon_pos(t) until
-         macroscopic divergence (eps_pos ~ O(1)) is reached.
-       - However, Velocity Verlet is symplectic; even in float32, the total mechanical
-         energy oscillates around a bounded shadow Hamiltonian without secular divergence,
-         maintaining eps_E ~ 1e-5 to 1e-6.
-
--------------------------------------------------------------------------------
-TASK 6: COMPUTATIONAL EFFICIENCY & LANGUAGE COMPARISON (PYTHON VS NUMPY VS C)
--------------------------------------------------------------------------------
-Objective:
-    Implement and benchmark pairwise force computation across three language tiers:
-    1. Pure Python nested loops (O(N^2) interpreted overhead, baseline).
-    2. Vectorized NumPy broadcasting (pair_forces in Section 1, SIMD C-core).
-    3. Compiled C shared library via ctypes, exploiting Newton's 3rd Law (j > i).
-
-C Implementation Source Code (pairforce.c):
-    Save the following implementation as 'pairforce.c':
-    ---------------------------------------------------------------------------
-    #include <math.h>
-
-    void compute_pair_forces(const double* pos, double* forces, int N,
-                             double k, double r0, double rc) {
-        // 1. Initialize forces array to zero
-        for (int i = 0; i < 2 * N; ++i) {
-            forces[i] = 0.0;
-        }
-
-        double rc2 = rc * rc;
-
-        // 2. Loop over unique pairs i < j (Newton's 3rd Law optimization)
-        for (int i = 0; i < N; ++i) {
-            double xi = pos[2 * i];
-            double yi = pos[2 * i + 1];
-            for (int j = i + 1; j < N; ++j) {
-                double dx = xi - pos[2 * j];
-                double dy = yi - pos[2 * j + 1];
-                double dist2 = dx * dx + dy * dy;
-
-                if (dist2 <= rc2 && dist2 > 1e-24) {
-                    double dist = sqrt(dist2);
-                    double fmag = -k * (dist - r0);
-                    double fx = fmag * (dx / dist);
-                    double fy = fmag * (dy / dist);
-
-                    // Equal and opposite pairwise reaction: F_ij = -F_ji
-                    forces[2 * i]     += fx;
-                    forces[2 * i + 1] += fy;
-                    forces[2 * j]     -= fx;
-                    forces[2 * j + 1] -= fy;
-                }
-            }
-        }
-    }
-    ---------------------------------------------------------------------------
-
-Compilation Commands:
-    Linux:
-        gcc -O2 -shared -fPIC -o libpairforce.so pairforce.c
-    macOS:
-        gcc -O2 -dynamiclib -fPIC -o libpairforce.dylib pairforce.c
-        (or gcc -O2 -shared -fPIC -o libpairforce.so pairforce.c)
-
-Python ctypes Binding & Wrapper:
-    import ctypes
-    lib_path = Path("./libpairforce.dylib" if sys.platform == "darwin" else "./libpairforce.so")
-    c_lib = ctypes.CDLL(str(lib_path))
-    c_lib.compute_pair_forces.argtypes = [
-        np.ctypeslib.ndpointer(dtype=np.float64, ndim=2, flags="C_CONTIGUOUS"),
-        np.ctypeslib.ndpointer(dtype=np.float64, ndim=2, flags="C_CONTIGUOUS, WRITEABLE"),
-        ctypes.c_int, ctypes.c_double, ctypes.c_double, ctypes.c_double
-    ]
-    c_lib.compute_pair_forces.restype = None
-
-    def pair_forces_c(pos, k=15.0, r0=1.5, rc=1.5):
-        forces = np.empty_like(pos)
-        c_lib.compute_pair_forces(pos, forces, len(pos), k, r0, rc)
-        return forces
-
-Benchmarking Protocol:
-    - Sweep particle counts N in [10, 20, 50, 100, 200, 500, 1000].
-    - Measure runtime of:
-      (a) Pure Python double loop
-      (b) NumPy pair_forces(pos)
-      (c) C pair_forces_c(pos)
-    - Compute Speedup: S_numpy = T_python / T_numpy, S_c = T_python / T_c.
-    - Expected results: C is 50x-200x faster than pure Python, and 2x-5x faster
-      than NumPy by avoiding intermediate (N, N, 2) heap allocations and halving
-      pair checks via symmetry j > i.
-
--------------------------------------------------------------------------------
-TASK 7: SCALABILITY & MEMORY BOTTLENECK ANALYSIS
--------------------------------------------------------------------------------
-Objective:
-    Evaluate memory scalability and identify the physical memory ceiling
-    of the vectorized NumPy broadcasting implementation.
-
-Displacement Tensor Memory Derivation:
-    The vectorized distance tensor computes:
-        d = pos[:, None, :] - pos[None, :, :]
-    Tensor shape: (N, N, 2)
-    Total elements: 2 * N^2
-    Exact memory consumption:
-        Memory_disp = 2 * N^2 * itemsize bytes
-
-    For standard float64 (itemsize = 8 bytes):
-        Memory_disp = 16 * N^2 bytes
-
-Complete Working Memory Footprint per Force Call:
-    - Displacement tensor 'd'    (N, N, 2, float64): 16 * N^2 bytes
-    - Distance matrix 'dist'      (N, N, float64):     8 * N^2 bytes
-    - Neighbor mask 'neighbors'   (N, N, bool):        1 * N^2 bytes
-    - Normalized unit vectors 'u' (N, N, 2, float64): 16 * N^2 bytes
-    - Force magnitude 'fmag'      (N, N, float64):     8 * N^2 bytes
-    ---------------------------------------------------------------------------
-    Total Peak Intermediate Memory: ~ 49 * N^2 bytes
-
-Empirical Scaling Table:
-    ---------------------------------------------------------------------------
-    N           Displacement Tensor (16*N^2)    Total Intermediate (~49*N^2)
-    ---------------------------------------------------------------------------
-    100         160 KB                         490 KB   (fits in CPU L2 cache)
-    1,000       16 MB                          49 MB    (fits in CPU L3 cache)
-    5,000       400 MB                         1.22 GB  (exceeds cache, RAM bound)
-    10,000      1.6 GB                         4.90 GB  (risk of RAM exhaustion)
-    50,000      40 GB                          122.5 GB (MemoryError / crash)
-    100,000     160 GB                         490 GB   (requires supercomputer)
-    ---------------------------------------------------------------------------
-
-Handover Instructions:
-    - Use `tracemalloc` to record peak allocated heap memory during pair_forces(pos).
-    - Plot Peak Memory (MB) vs N on log-log scale. Verify the slope is exactly 2.0.
-    - Conclude that while vectorized NumPy is elegant for small N, its O(N^2)
-      spatial footprint is a fatal scaling barrier, necessitating Task 8.
-
--------------------------------------------------------------------------------
-TASK 8: ALGORITHMIC INNOVATION (O(N) LINKED CELLS & LJ POTENTIALS)
--------------------------------------------------------------------------------
-Objective:
-    Break the O(N^2) scaling barrier using a Linked-Cell / Cell-List spatial
-    decomposition algorithm, and extend physics to Lennard-Jones interactions.
-
-Insertion Point in simulator.py:
-    Replace or provide an alternate backend for `pairwise_distances()` and
-    `pair_forces()` in Section 1.
-
-Linked-Cell Algorithm Blueprint:
-    1. Spatial Discretization:
-       Subdivide box L x L into an M x M grid of square cells, where cell width:
-           r_cell = L / M >= rc   ==>   M = int(np.floor(L / rc))
-    2. Binning Particles:
-       Map each particle i at (x_i, y_i) to cell coordinates:
-           cell_x = int(x_i / r_cell)
-           cell_y = int(y_i / r_cell)
-       Construct linked list arrays:
-           head[M, M] : index of first particle in each cell
-           next_particle[N] : index of next particle in the same cell
-    3. Interaction Computation:
-       To compute forces on particle i in cell (cx, cy), only iterate over
-       particles residing in cell (cx, cy) and the 8 adjacent neighbor cells.
-    4. Complexity Breakthrough:
-       - For homogeneous density, average particles per cell rho_cell = N / M^2.
-       - Each particle checks 9 * rho_cell neighbors = O(1).
-       - Total time complexity drops from O(N^2) to O(N).
-       - Total memory complexity drops from O(N^2) to O(N) (never allocate (N, N, 2)).
-
-Lennard-Jones (12-6) Potential Extension:
-    To model realistic molecular van der Waals attraction and Pauli repulsion:
-        V_LJ(r) = 4 * epsilon * [(sigma / r)^12 - (sigma / r)^6]
-        F_LJ(r) = (24 * epsilon / r) * [2 * (sigma / r)^12 - (sigma / r)^6] * (r_vec / r)
-    Add a parameter `potential="harmonic"` or `potential="lennard_jones"` in
-    `pair_forces()` and `potential_energy()`.
-
--------------------------------------------------------------------------------
-TASK 9: ENGINEERING DECISIONS & FINAL SYSTEM SYNTHESIS
--------------------------------------------------------------------------------
-Objective:
-    Synthesize all analytical and benchmark results from Tasks 1-8 into definitive
-    engineering recommendations for production molecular dynamics.
-
-Definitive Decision Matrix:
-    1. Time Integrator:
-       - Selection: Velocity Verlet (step_verlet).
-       - Rationale: Symplectic, time-reversible, second-order accurate O(dt^2).
-         Total mechanical energy exhibits strictly bounded oscillations without
-         secular drift. Euler exhibits exponential energy divergence (Task 3).
-    2. Timestep Selection:
-       - Selection: dt = 0.005 s.
-       - Rationale: Provides eps_E,max ~ 0.003 (0.3% relative energy variation),
-         well below typical 1% scientific thresholds, while requiring 5x fewer
-         costly force evaluations than dt = 0.001 s.
-    3. Numerical Precision:
-       - Scientific Computing / Trajectory Fidelity: float64 is strictly required
-         due to exponential divergence of chaotic Lyapunov trajectories (Task 5).
-       - Real-time Visualizations / Interactive Graphics: float32 is optimal,
-         reducing memory bandwidth by 50% while preserving stable bounded energy.
-    4. Execution Strategy vs Scale:
-       - Small Systems (N <= 1,000): Vectorized NumPy broadcasting (simplicity).
-       - Medium Systems (1,000 < N <= 10,000): Compiled C via ctypes (Task 6).
-       - Large Systems (N > 10,000): Linked-Cell spatial lists (Task 8).
-    5. Dissipation Regime:
-       - Selection: gamma = 0.5 s^-1.
-       - Rationale: Produces rapid, monotonic kinetic relaxation to static
-         mechanical equilibrium (t_relax ~ 16 s) without lingering ringing (Task 4).
+Architecture Summary:
+- Unified Physics Core (task3_4.py):
+    Shared vectorised functions for pairwise distances, Hookean pair forces,
+    symplectic Velocity Verlet integration, kinetic/potential energy calculations,
+    and elastic wall reflections. All other task scripts import from here.
+- Task 5 (Task5_2D_Report_and_Results/task5_precision_2d.py):
+    Precision study (float32 vs float64) measuring energy drift and Lyapunov trajectory divergence.
+- Task 6 (Task6_Revised_2D/task6_benchmark.py):
+    Computational benchmarking comparing pure Python double loop, vectorized NumPy,
+    and the compiled C kernel (pairforce.c via ctypes, achieving >70x speedup).
+- Task 7 (fosc task 7 CODE.py):
+    Displacement tensor memory scaling (2D vs 3D) and analytical Out-Of-Memory limit estimation.
+- Interactive GUI & Engine (simulator.py):
+    Live multi-panel particle animation with dynamic elastic ball squish on collision,
+    optional compiled C backend acceleration (--backend c), and modular task dispatching.
 """
 
 
@@ -998,8 +593,36 @@ def parse_args():
         help="Run Task 4 numerical experiments (viscous damping scan, relaxation times, save plots in 'task_4 results/')."
     )
     parser.add_argument(
+        "--task5", action="store_true",
+        help="Run Task 5 numerical precision study (float32 vs float64, energy drift, trajectory divergence)."
+    )
+    parser.add_argument(
+        "--task6", action="store_true",
+        help="Run Task 6 efficiency benchmark (Python double loop vs NumPy vectorized vs compiled C)."
+    )
+    parser.add_argument(
+        "--task7", action="store_true",
+        help="Run Task 7 2D & 3D displacement tensor memory scaling and OOM analysis."
+    )
+    parser.add_argument(
         "--all-tasks", action="store_true",
-        help="Run Tasks 1, 3, and 4 in sequential automated batch."
+        help="Run Tasks 1, 3, 4, 5, 6, and 7 in sequential automated batch."
+    )
+    parser.add_argument(
+        "--backend", type=str, choices=["numpy", "c"], default=None,
+        help="Force calculation backend: 'numpy' (vectorized broadcasting) or 'c' (compiled ctypes kernel, pairforce.c)."
+    )
+    parser.add_argument(
+        "--c-backend", dest="backend", action="store_const", const="c",
+        help="Shortcut to enable the compiled C backend (pairforce.c via ctypes)."
+    )
+    parser.add_argument(
+        "--dynamic-squish", dest="dynamic_squish", action="store_true", default=None,
+        help="Enable dynamic visual ball contraction during collisions (elastic squish)."
+    )
+    parser.add_argument(
+        "--no-squish", dest="dynamic_squish", action="store_false",
+        help="Disable dynamic visual ball contraction (keep constant radius circles)."
     )
 
     # Interactive Simulation & Dynamic Physics Configuration Flags
@@ -1058,7 +681,22 @@ def main():
         run_task4()
         sys.exit(0)
 
-    # Route 5: Interactive Live Simulation (GUI or Headless)
+    # Route 5: Run Task 5 experiments
+    if args.task5:
+        run_task5()
+        sys.exit(0)
+
+    # Route 6: Run Task 6 benchmark
+    if args.task6:
+        run_task6()
+        sys.exit(0)
+
+    # Route 7: Run Task 7 memory scaling analysis
+    if args.task7:
+        run_task7()
+        sys.exit(0)
+
+    # Route 8: Interactive Live Simulation (GUI or Headless)
     run_live_simulation(
         preset=args.preset,
         gamma=args.gamma,
@@ -1078,6 +716,8 @@ def main():
         hard_core=args.hard_core,
         v_max=args.v_max,
         substeps=args.substeps,
+        backend=args.backend,
+        dynamic_squish=args.dynamic_squish,
     )
 
 

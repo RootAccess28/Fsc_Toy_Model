@@ -33,10 +33,20 @@ from pathlib import Path
 from statistics import median
 from time import perf_counter
 
+# Ensure project root is in sys.path so task3_4 can be imported from any working directory
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+
+try:
+    from core.physics import pair_forces
+except ImportError:
+    from task3_4 import pair_forces
 
 # Match task3_4.py exactly.
 N_REFERENCE = 12
@@ -131,7 +141,7 @@ def python_double_loop(pos: np.ndarray) -> np.ndarray:
             dy = yi - float(pos[j, 1])
             dist = math.sqrt(dx * dx + dy * dy)
             if dist > EPS and dist <= RC:
-                factor = -K_SPRING * (dist - R0) / (dist + EPS)
+                factor = -K_SPRING * (dist - R0) / dist
                 fx = factor * dx
                 fy = factor * dy
                 forces[i, 0] += fx
@@ -142,13 +152,8 @@ def python_double_loop(pos: np.ndarray) -> np.ndarray:
 
 
 def numpy_vectorized(pos: np.ndarray) -> np.ndarray:
-    """Full N x N broadcasting implementation from task3_4.py."""
-    d = pos[:, None, :] - pos[None, :, :]
-    dist = np.sqrt(np.sum(d * d, axis=-1))
-    neighbors = (dist > EPS) & (dist <= RC)
-    unit = d / (dist[:, :, None] + EPS)
-    fmag = -K_SPRING * (dist - R0) * neighbors
-    return np.sum(fmag[:, :, None] * unit, axis=1)
+    """Vectorized pair forces imported from task3_4.py."""
+    return pair_forces(pos, k=K_SPRING, r0=R0, rc=RC)
 
 
 def make_c_wrapper(c_function):
@@ -346,17 +351,26 @@ def run_benchmark(sizes: list[int], samples: int) -> None:
     _ = library_handle
 
 
+def run_task_6(sizes: list[int] | None = None, samples: int = DEFAULT_SAMPLES) -> None:
+    if sizes is None:
+        sizes = DEFAULT_SIZES
+    if any(n < 2 for n in sizes):
+        raise ValueError("All N values must be >= 2.")
+    if samples < 5:
+        raise ValueError("Task 6 requires at least 5 timing samples; use samples >= 5.")
+    run_benchmark(sizes, samples)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run Task 6: 2D Python/NumPy/C pair-force benchmark.")
     parser.add_argument("--sizes", nargs="+", type=int, default=DEFAULT_SIZES)
     parser.add_argument("--samples", type=int, default=DEFAULT_SAMPLES)
     args = parser.parse_args()
-    if any(n < 2 for n in args.sizes):
-        raise SystemExit("All N values must be >= 2.")
-    if args.samples < 5:
-        raise SystemExit("Task 6 requires at least 5 timing samples; use --samples 5 or more.")
-    run_benchmark(args.sizes, args.samples)
+    run_task_6(args.sizes, args.samples)
 
 
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) > 1:
+        main()
+    else:
+        run_task_6()

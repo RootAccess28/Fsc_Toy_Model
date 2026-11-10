@@ -18,10 +18,34 @@ import csv
 import platform
 import sys
 
+# Ensure project root is in sys.path so task3_4 can be imported from any working directory
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+
+try:
+    from core.physics import (
+        pairwise_distances,
+        pair_forces,
+        walls_reflect,
+        kinetic_energy,
+        potential_energy,
+        step_verlet,
+    )
+except ImportError:
+    from task3_4 import (
+        pairwise_distances,
+        pair_forces,
+        walls_reflect,
+        kinetic_energy,
+        potential_energy,
+        step_verlet,
+    )
 
 # -----------------------------------------------------------------------------
 # Parameters copied from the uploaded task3_4.py 2D Tasks 3-4 model.
@@ -63,78 +87,6 @@ def state_for_dtype(dtype):
     )
 
 
-def pairwise_distances(pos, rc=RC):
-    """2D pairwise displacement, distance, and neighbor matrices."""
-    scalar = pos.dtype.type
-    d = pos[:, None, :] - pos[None, :, :]
-    dist_sq = np.sum(d * d, axis=-1, dtype=pos.dtype)
-    dist = np.sqrt(dist_sq)
-    neighbors = (dist > scalar(1e-12)) & (dist <= scalar(rc))
-    return d, dist, neighbors
-
-
-def pair_forces(pos):
-    """Vectorized Hooke-style pair force used by the Task 3-4 script."""
-    scalar = pos.dtype.type
-    d, dist, neighbors = pairwise_distances(pos)
-    denom = dist[:, :, None]
-    unit = np.divide(
-        d,
-        denom,
-        out=np.zeros_like(d),
-        where=denom > scalar(0.0),
-    )
-    fmag = -scalar(K_SPRING) * (dist - scalar(R0)) * neighbors
-    return np.sum(fmag[:, :, None] * unit, axis=1, dtype=pos.dtype)
-
-
-def walls_reflect(pos, vel):
-    """Reflect particles from the four faces of the 2D square [0,L]^2."""
-    for axis in range(DIM):
-        low = pos[:, axis] < pos.dtype.type(0.0)
-        vel[low, axis] *= pos.dtype.type(-1.0)
-        pos[low, axis] = pos.dtype.type(0.0)
-
-        high = pos[:, axis] > pos.dtype.type(L)
-        vel[high, axis] *= pos.dtype.type(-1.0)
-        pos[high, axis] = pos.dtype.type(L)
-    return pos, vel
-
-
-def kinetic_energy(vel, mass):
-    scalar = vel.dtype.type
-    return scalar(0.5) * np.sum(
-        mass[:, None] * (vel * vel), dtype=vel.dtype
-    )
-
-
-def potential_energy(pos):
-    scalar = pos.dtype.type
-    _, dist, neighbors = pairwise_distances(pos)
-    pair_u = scalar(0.5) * scalar(K_SPRING) * (
-        (dist - scalar(R0)) ** 2
-    ) * neighbors
-    # Distance/neighbor matrices contain both (i,j) and (j,i).
-    return scalar(0.5) * np.sum(pair_u, dtype=pos.dtype)
-
-
-def step_verlet(pos, vel, mass, dt_value, force_previous=None):
-    """One conservative velocity-Verlet step, using the active dtype."""
-    scalar = pos.dtype.type
-    if force_previous is None:
-        force_previous = pair_forces(pos)
-
-    acceleration_previous = force_previous / mass[:, None]
-    vel_half = vel + scalar(0.5) * acceleration_previous * dt_value
-    pos_new = pos + vel_half * dt_value
-    pos_new, vel_half = walls_reflect(pos_new, vel_half)
-
-    force_new = pair_forces(pos_new)
-    acceleration_new = force_new / mass[:, None]
-    vel_new = vel_half + scalar(0.5) * acceleration_new * dt_value
-    return pos_new, vel_new, force_new
-
-
 def simulate(dtype, save_positions=False):
     """Run the same 2D conservative simulation using the requested dtype."""
     pos, vel, mass = state_for_dtype(dtype)
@@ -156,7 +108,7 @@ def simulate(dtype, save_positions=False):
     force_previous = None
     for step_index in range(1, n_steps + 1):
         pos, vel, force_previous = step_verlet(
-            pos, vel, mass, dt_value, force_previous
+            pos, vel, mass, dt_value, force_previous=force_previous
         )
         K_hist[step_index] = kinetic_energy(vel, mass)
         U_hist[step_index] = potential_energy(pos)
@@ -203,7 +155,7 @@ def measure_runtimes():
     return medians, samples
 
 
-def main():
+def run_task_5():
     result32 = simulate(np.float32, save_positions=True)
     result64 = simulate(np.float64, save_positions=True)
 
@@ -373,6 +325,20 @@ def main():
     print(f"float32/float64 median time ratio: {time32 / time64:.4f} (less than 1 means float32 was faster)")
     print(f"Outputs: {OUT_DIR}")
 
+    return {
+        "result32": result32,
+        "result64": result64,
+        "metrics_rows": metrics_rows,
+        "runtime_medians": runtime_medians,
+        "runtime_samples": runtime_samples,
+        "final_position_error": final_position_error,
+        "max_position_error": max_position_error,
+        "out_dir": OUT_DIR,
+    }
+
+
+main = run_task_5
+
 
 if __name__ == "__main__":
-    main()
+    run_task_5()

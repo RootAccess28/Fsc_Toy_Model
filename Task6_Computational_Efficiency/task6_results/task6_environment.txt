@@ -1,0 +1,14 @@
+TASK 6 BENCHMARK ENVIRONMENT
+Timestamp: 2026-11-10T10:02:02+05:30
+OS: macOS-27.2-arm64-arm-64bit-Mach-O
+Processor: arm
+Python: 3.14.7 (main, Aug  5 2026, 10:29:49) [Clang 21.0.0 (clang-2100.1.1.101)]
+NumPy: 2.5.4
+Compiler: Apple clang version 21.0.0 (clang-2100.3.34.2)
+Compiler flags: -O2 shared library
+N sizes: [50, 200, 500, 1000]
+Samples per method per N: 5
+Position density rule: accessible_side=(10.0-1.6)*sqrt(N/12); margin=0.8
+Force parameters: k=15.0, r0=1.5, rc=1.5, epsilon=1e-12
+C function ABI: compute_pair_forces(int N, const double *pos, double *F, double rc, double r0, double k)
+Timing includes Python-to-ctypes function-call overhead for the C method; excludes compilation and data generation.
