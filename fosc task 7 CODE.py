@@ -1,250 +1,305 @@
+
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib.widgets import Slider
+import ctypes
 
-N_VALUES = [100, 1000, 5000, 10000]
-DIMENSIONS = 3
+# MEMORY AND SCALABILITY - FSC (2D)
+
+PARTICLE_COUNTS = [100, 1000, 5000, 10000]
+DIMENSIONS = 2
 VERIFY_N = 1000
 
-DATA_TYPES = {
-    "float32": np.float32,
-    "float64": np.float64
-}
+
+# --------------------------------------------------
+# 1. MEMORY LAYOUT OF POSITION ARRAY
+# --------------------------------------------------
+
+np.random.seed(0)
+
+N_initial = 12
+pos = np.random.rand(N_initial, 2) * 10
+pos32 = pos.astype(np.float32)
+
+print("\nMEMORY LAYOUT OF POSITION ARRAY")
+print("--------------------------------")
+
+print("Shape:", pos.shape)
+print("Data type:", pos.dtype)
+print("Item size:", pos.itemsize, "bytes")
+print("Total memory:", pos.nbytes, "bytes")
+print("Strides:", pos.strides)
+
+print("\nFLOAT32 POSITION ARRAY")
+print("Data type:", pos32.dtype)
+print("Item size:", pos32.itemsize, "bytes")
+print("Total memory:", pos32.nbytes, "bytes")
+
+print("\nC DATA TYPE SIZES")
+c_float_size = ctypes.sizeof(ctypes.c_float)
+c_double_size = ctypes.sizeof(ctypes.c_double)
+
+print("sizeof(float):", c_float_size, "bytes")
+print("sizeof(double):", c_double_size, "bytes")
 
 
-# Memory of one displacement array
-def displacement_memory(n, dtype):
-    return n * n * DIMENSIONS * np.dtype(dtype).itemsize
+# --------------------------------------------------
+# 2. POSITION MEMORY FOR N = 100000
+# --------------------------------------------------
+
+N_large = 100000
+
+position_memory_64 = (
+    N_large * DIMENSIONS * c_double_size
+)
+
+position_memory_32 = (
+    N_large * DIMENSIONS * c_float_size
+)
+
+print("\nPOSITION MEMORY FOR N = 100000")
+print("--------------------------------")
+
+print("Float64:", position_memory_64, "bytes")
+print("Float32:", position_memory_32, "bytes")
+
+print(
+    "Float64:",
+    round(position_memory_64 / (1024 ** 2), 3),
+    "MiB"
+)
+
+print(
+    "Float32:",
+    round(position_memory_32 / (1024 ** 2), 3),
+    "MiB"
+)
 
 
-# Approximate memory for vectorized working arrays
-def working_memory(n, dtype):
+# --------------------------------------------------
+# 3. PAIRWISE DISPLACEMENT MEMORY CALCULATION
+# --------------------------------------------------
+
+def calculate_memory(N, dtype):
     itemsize = np.dtype(dtype).itemsize
-    bytes_per_pair = 11 * itemsize + 1
-    return n * n * bytes_per_pair
+    return N * N * DIMENSIONS * itemsize
 
 
-def to_gib(byte_count):
-    return byte_count / (1024 ** 3)
+def format_memory(size):
+    mib = size / (1024 ** 2)
+    gib = size / (1024 ** 3)
+
+    if gib >= 1:
+        return f"{gib:.3f} GiB"
+
+    return f"{mib:.3f} MiB"
 
 
-# 1. Memory table
-def print_memory_table():
+print("\nPAIRWISE DISPLACEMENT MEMORY")
+print("Array shape: (N, N, 2)")
+print("Formula: N x N x 2 x itemsize\n")
 
-    print("\n3D MEMORY AND SCALABILITY")
-    print("Shape = (N, N, 3)")
-    print("Formula = N x N x 3 x itemsize\n")
+print(
+    f"{'N':>8} | {'Float32':>15} | "
+    f"{'Float64':>15}"
+)
+print("-" * 45)
 
-    print(f"{'N':>8} | {'float32':>12} | {'float64':>12}")
-    print("-" * 40)
+for N in PARTICLE_COUNTS:
 
-    for n in N_VALUES:
+    memory32 = calculate_memory(N, np.float32)
+    memory64 = calculate_memory(N, np.float64)
 
-        m32 = to_gib(displacement_memory(n, np.float32))
-        m64 = to_gib(displacement_memory(n, np.float64))
-
-        print(f"{n:8d} | {m32:9.4f} GiB | {m64:9.4f} GiB")
-
-
-# 2. NumPy verification
-def verify_numpy():
-
-    print("\nNUMPY nbytes VERIFICATION")
-
-    for dtype in DATA_TYPES.values():
-
-        array = np.empty(
-            (VERIFY_N, VERIFY_N, DIMENSIONS),
-            dtype=dtype
-        )
-
-        expected = displacement_memory(VERIFY_N, dtype)
-
-        print("\nData type:", np.dtype(dtype))
-        print("Shape:", array.shape)
-        print("Theoretical:", expected, "bytes")
-        print("NumPy nbytes:", array.nbytes)
-        print("Match:", expected == array.nbytes)
-
-        del array
-
-
-# 3. Scalability estimates
-def print_scalability():
-
-    print("\nESTIMATED VECTORISED WORKING MEMORY")
-    print("These are approximate estimates, not measured RAM usage.")
-
-    print(f"{'N':>8} | {'float32':>12} | {'float64':>12}")
-    print("-" * 40)
-
-    for n in N_VALUES:
-
-        m32 = to_gib(working_memory(n, np.float32))
-        m64 = to_gib(working_memory(n, np.float64))
-
-        print(f"{n:8d} | {m32:9.4f} GiB | {m64:9.4f} GiB")
-
-    print("\nMemory grows approximately as O(N^2).")
-    print("Doubling N makes memory four times larger.")
-
-
-# GRAPH 1: Displacement memory
-def graph_displacement():
-
-    plt.figure(figsize=(9, 6))
-
-    for name, dtype in DATA_TYPES.items():
-
-        values = [
-            to_gib(displacement_memory(n, dtype))
-            for n in N_VALUES
-        ]
-
-        plt.plot(
-            N_VALUES,
-            values,
-            marker="o",
-            linewidth=2,
-            markersize=7,
-            label=name
-        )
-
-    plt.xlabel("Number of particles (N)")
-    plt.ylabel("Displacement memory (GiB)")
-    plt.title("3D Pairwise Displacement Memory vs Particle Count")
-
-    plt.xticks(N_VALUES)
-    plt.xlim(0, 11000)
-    plt.yscale("log")
-
-    plt.grid(True, which="both", alpha=0.3)
-    plt.legend()
-    plt.tight_layout()
-
-    plt.savefig("task7_graph1_displacement_memory.png", dpi=300)
-    plt.show()
-
-
-# GRAPH 2: Interactive working memory comparison
-def graph_interactive():
-
-    fig, ax = plt.subplots(figsize=(9, 6))
-
-    fig.subplots_adjust(bottom=0.25, top=0.82)
-
-    initial_n = 10000
-
-    values = [
-        to_gib(working_memory(initial_n, np.float32)),
-        to_gib(working_memory(initial_n, np.float64))
-    ]
-
-    bars = ax.bar(
-        ["float32", "float64"],
-        values,
-        width=0.5
+    print(
+        f"{N:8d} | "
+        f"{format_memory(memory32):>15} | "
+        f"{format_memory(memory64):>15}"
     )
 
-    ax.set_yscale("log")
-    ax.set_ylabel("Estimated working memory (GiB)")
-    ax.set_title(
-        "Estimated 3D Vectorized Working Memory\n"
-        f"Particle Count N = {initial_n}"
+
+# --------------------------------------------------
+# 4. VERIFY THEORETICAL MEMORY WITH NUMPY NBYTES
+# --------------------------------------------------
+
+print("\nNUMPY MEMORY VERIFICATION")
+print("Verification N =", VERIFY_N)
+
+for dtype in [np.float32, np.float64]:
+
+    displacement = np.zeros(
+        (VERIFY_N, VERIFY_N, DIMENSIONS),
+        dtype=dtype
     )
 
-    ax.grid(axis="y", alpha=0.3)
-    ax.set_axisbelow(True)
+    theoretical = calculate_memory(VERIFY_N, dtype)
 
-    # Display values above bars
-    labels = []
+    print("\nData type:", displacement.dtype)
+    print("Shape:", displacement.shape)
+    print("Item size:", displacement.itemsize, "bytes")
+    print("Theoretical memory:", theoretical, "bytes")
+    print("NumPy nbytes:", displacement.nbytes, "bytes")
+    print("Match:", theoretical == displacement.nbytes)
 
-    for bar, value in zip(bars, values):
+    del displacement
 
-        label = ax.text(
-            bar.get_x() + bar.get_width() / 2,
-            value * 1.15,
-            f"{value:.4f} GiB",
-            ha="center",
-            fontsize=10
-        )
 
-        labels.append(label)
+# --------------------------------------------------
+# 5. GRAPH 1: MEMORY VS PARTICLE COUNT
+# --------------------------------------------------
 
-    ax.set_ylim(min(values) / 2, max(values) * 3)
+N_values = np.array(PARTICLE_COUNTS)
 
-    # Slider for particle count
-    slider_ax = fig.add_axes([0.20, 0.10, 0.65, 0.04])
+memory32 = np.array([
+    calculate_memory(N, np.float32) / (1024 ** 3)
+    for N in PARTICLE_COUNTS
+])
 
-    particle_slider = Slider(
-        slider_ax,
-        "Particle count",
-        0,
-        len(N_VALUES) - 1,
-        valinit=3,
-        valstep=1
+memory64 = np.array([
+    calculate_memory(N, np.float64) / (1024 ** 3)
+    for N in PARTICLE_COUNTS
+])
+
+fig, ax = plt.subplots(figsize=(10, 6))
+
+ax.plot(
+    N_values,
+    memory32,
+    marker="o",
+    markersize=8,
+    linewidth=2.5,
+    label="Float32"
+)
+
+ax.plot(
+    N_values,
+    memory64,
+    marker="s",
+    markersize=8,
+    linewidth=2.5,
+    label="Float64"
+)
+
+ax.set_title(
+    "Memory Requirement vs Number of Particles (2D)",
+    fontsize=14,
+    fontweight="bold",
+    pad=15
+)
+
+ax.set_xlabel("Number of Particles (N)", fontsize=12)
+ax.set_ylabel("Memory Requirement (GiB)", fontsize=12)
+
+# Linear particle-count axis and logarithmic memory axis
+ax.set_yscale("log")
+ax.set_xticks(N_values)
+ax.set_xticklabels([f"{n:,}" for n in N_values])
+
+ax.grid(
+    True,
+    which="both",
+    linestyle="--",
+    alpha=0.4
+)
+
+ax.legend(fontsize=11)
+ax.margins(x=0.08)
+
+fig.tight_layout()
+
+fig.savefig(
+    "memory_and_scalability_fsc.png",
+    dpi=300,
+    bbox_inches="tight"
+)
+
+plt.show()
+
+
+# --------------------------------------------------
+# 6. GRAPH 2: MEMORY INCREASE BETWEEN PARTICLE COUNTS
+# --------------------------------------------------
+
+growth_factors = (
+    N_values[1:] / N_values[:-1]
+) ** 2
+
+interval_labels = [
+    f"{N_values[i]:,} to {N_values[i + 1]:,}"
+    for i in range(len(N_values) - 1)
+]
+
+fig, ax = plt.subplots(figsize=(10, 6))
+
+bars = ax.bar(
+    interval_labels,
+    growth_factors,
+    width=0.55
+)
+
+ax.set_title(
+    "Increase in Memory Between Particle Counts (2D)",
+    fontsize=14,
+    fontweight="bold",
+    pad=15
+)
+
+ax.set_xlabel("Increase in Particle Count", fontsize=12)
+ax.set_ylabel("Memory Multiplication Factor", fontsize=12)
+
+ax.grid(
+    axis="y",
+    linestyle="--",
+    alpha=0.4
+)
+
+ax.set_axisbelow(True)
+
+for bar, value in zip(bars, growth_factors):
+
+    ax.annotate(
+        f"{value:.0f}x",
+        xy=(bar.get_x() + bar.get_width() / 2, bar.get_height()),
+        xytext=(0, 7),
+        textcoords="offset points",
+        ha="center",
+        fontsize=11,
+        fontweight="bold"
     )
 
-    def update(value):
+ax.set_ylim(0, max(growth_factors) * 1.2)
 
-        index = int(value)
-        n = N_VALUES[index]
+fig.tight_layout()
 
-        new_values = [
-            to_gib(working_memory(n, np.float32)),
-            to_gib(working_memory(n, np.float64))
-        ]
+fig.savefig(
+    "memory_growth_fsc.png",
+    dpi=300,
+    bbox_inches="tight"
+)
 
-        for bar, label, new_value in zip(
-            bars, labels, new_values
-        ):
+plt.show()
 
-            bar.set_height(new_value)
 
-            label.set_y(new_value * 1.15)
-            label.set_text(f"{new_value:.4f} GiB")
+# --------------------------------------------------
+# 7. SCALABILITY ANALYSIS
+# --------------------------------------------------
 
-        ax.set_ylim(
-            min(new_values) / 2,
-            max(new_values) * 3
-        )
+print("\nSCALABILITY ANALYSIS")
+print("--------------------")
 
-        ax.set_title(
-            "Estimated 3D Vectorized Working Memory\n"
-            f"Particle Count N = {n}"
-        )
+print("Memory complexity: O(N^2)")
+print("Float64 uses twice the memory of Float32.")
 
-        fig.canvas.draw_idle()
+print("\nMemory growth between tested particle counts:")
 
-    particle_slider.on_changed(update)
+for i in range(len(N_values) - 1):
 
-    plt.savefig(
-        "task7_graph2_interactive_memory.png",
-        dpi=300
+    print(
+        f"{N_values[i]:,} to {N_values[i + 1]:,}: "
+        f"{growth_factors[i]:.0f} times"
     )
 
-    plt.show()
+print("\nOnly one pairwise displacement array is counted")
+print("in the main memory table.")
+print("Other arrays used by a complete vectorized simulation")
+print("will require additional RAM.")
 
-
-# MAIN PROGRAM
-def main():
-
-    print("NumPy version:", np.__version__)
-
-    print_memory_table()
-    verify_numpy()
-    print_scalability()
-
-    print("\nOpening Graph 1...")
-    graph_displacement()
-
-    print("\nOpening Interactive Graph 2...")
-    graph_interactive()
-
-    print("\nBoth graphs saved successfully!")
-    print("TASK 7 COMPLETED.")
-
-
-if __name__ == "__main__":
-    main()
-
+print("\nBoth graphs saved successfully.")
