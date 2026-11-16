@@ -1,8 +1,4 @@
-"""
-Compiled C Pair Force Acceleration Module
-=========================================
-Dynamically builds and binds pairforce.c via ctypes for ~30x-88x speedup.
-"""
+"""Native C pairforce kernel loader."""
 
 import ctypes
 import platform
@@ -14,11 +10,8 @@ import numpy as np
 _C_PAIR_FORCES_FN = None
 
 
+# Compile and load pairforce.c shared library via ctypes
 def get_c_pair_forces_fn():
-    """
-    Compiles and loads the native C pair force kernel (pairforce.c) via ctypes.
-    Returns a callable pair_forces_c(pos, k=4000.0, r0=0.70, rc=0.70) with ~30x-88x speedup.
-    """
     global _C_PAIR_FORCES_FN
     if _C_PAIR_FORCES_FN is not None:
         return _C_PAIR_FORCES_FN
@@ -26,12 +19,11 @@ def get_c_pair_forces_fn():
     core_dir = Path(__file__).resolve().parent
     root_dir = core_dir.parent
 
-    # Candidate source locations
+    # Candidate source paths
     candidates = [
         core_dir / "pairforce.c",
         root_dir / "pairforce.c",
         root_dir / "Task6_Computational_Efficiency" / "pairforce_task6.c",
-        root_dir / "Task6_Revised_2D" / "pairforce_task6.c",
     ]
     c_source = None
     for cand in candidates:
@@ -40,8 +32,9 @@ def get_c_pair_forces_fn():
             break
 
     if c_source is None:
-        raise FileNotFoundError("Could not find pairforce.c in core/, project root, or Task6/.")
+        raise FileNotFoundError("Could not find pairforce.c.")
 
+    # Platform shared library extension
     system = platform.system()
     lib_name = (
         "pairforce.dll"
@@ -50,35 +43,39 @@ def get_c_pair_forces_fn():
     )
     lib_path = core_dir / lib_name
 
+    # Compile if library binary does not exist
     if not lib_path.exists():
         compiler = "clang" if shutil.which("clang") and system == "Darwin" else "gcc"
         if not shutil.which(compiler):
             compiler = shutil.which("gcc") or shutil.which("clang")
         if not compiler:
-            raise RuntimeError("No C compiler (gcc/clang) found on PATH to build pairforce.c.")
+            raise RuntimeError("No C compiler (gcc or clang) found on PATH.")
 
         flags = ["-O2", "-shared"] if system != "Darwin" else ["-O2", "-dynamiclib", "-fPIC"]
         cmd = [compiler] + flags + ["-o", str(lib_path), str(c_source), "-lm"]
         subprocess.run(cmd, check=True, capture_output=True)
 
+    # Bind C function
     c_lib = ctypes.CDLL(str(lib_path))
     c_fn = c_lib.compute_pair_forces
     ptr = ctypes.POINTER(ctypes.c_double)
     c_fn.argtypes = [ctypes.c_int, ptr, ptr, ctypes.c_double, ctypes.c_double, ctypes.c_double]
     c_fn.restype = None
 
+    # Python wrapper function
     def pair_forces_c(pos, k=4000.0, r0=0.70, rc=0.70):
+        N = len(pos)
         pos_c = np.ascontiguousarray(pos, dtype=np.float64)
-        F = np.empty_like(pos_c)
-        c_fn(
-            ctypes.c_int(pos_c.shape[0]),
-            pos_c.ctypes.data_as(ptr),
-            F.ctypes.data_as(ptr),
-            ctypes.c_double(rc),
-            ctypes.c_double(r0),
-            ctypes.c_double(k),
-        )
-        return F
+        F_c = np.zeros((N, 2), dtype=np.float64)
+
+        pos_ptr = pos_c.ctypes.data_as(ptr)
+        F_ptr = F_c.ctypes.data_as(ptr)
+
+        c_fn(N, pos_ptr, F_ptr, float(rc), float(r0), float(k))
+
+        if pos.dtype == np.float32:
+            return F_c.astype(np.float32)
+        return F_c
 
     _C_PAIR_FORCES_FN = pair_forces_c
-    return pair_forces_c
+    return _C_PAIR_FORCES_FN

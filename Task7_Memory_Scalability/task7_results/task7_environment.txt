@@ -1,0 +1,8 @@
+TASK 7: ENVIRONMENT AND SYSTEM SPECIFICATIONS
+=======================================================
+Date & Time        : 2026-11-16 22:53:43
+Operating System   : Darwin 27.2.0 (arm64)
+Python Version     : 3.14.7
+NumPy Version      : 2.5.4
+Matplotlib Version : 3.11.2
+Simulation Space   : 2D (x, y)

@@ -63,7 +63,7 @@ TARGET_BATCH_SECONDS = 0.025
 MAX_BATCH_REPEATS = 2000
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-OUT_DIR = SCRIPT_DIR / "task6_results"
+OUT_DIR = SCRIPT_DIR / "results"
 C_SOURCE = SCRIPT_DIR / "pairforce_task6.c"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -340,6 +340,14 @@ def run_benchmark(sizes: list[int], samples: int) -> None:
         "Timing includes Python-to-ctypes function-call overhead for the C method; excludes compilation and data generation.",
     ]
     (OUT_DIR / "task6_environment.txt").write_text("\n".join(env) + "\n", encoding="utf-8")
+
+    # Mirror to task6_results for backward compatibility
+    legacy_dir = SCRIPT_DIR / "task6_results"
+    if OUT_DIR != legacy_dir:
+        legacy_dir.mkdir(parents=True, exist_ok=True)
+        for f in OUT_DIR.glob("*"):
+            if f.is_file():
+                shutil.copy2(f, legacy_dir / f.name)
 
     print(f"\nSaved Task 6 files in: {OUT_DIR}")
     print("  task6_timing_summary.csv")

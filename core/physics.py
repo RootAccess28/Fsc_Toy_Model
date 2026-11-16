@@ -1,22 +1,10 @@
-"""
-Core Physics Engine
-===================
-Unified, dtype-agnostic, vectorised molecular/atomic physics kernels.
-Shared across all simulation tasks and live interactive GUI.
-"""
+"""Core physics engine for 2D molecular simulation."""
 
 import numpy as np
 
 
-# =============================================================================
-# 1. STATE INITIALIZATION
-# =============================================================================
+# Particle initialization
 def init_state(seed=42, N=12, L=10.0, v_max=4.4, margin=0.8, dtype=np.float64):
-    """
-    Initializes particle positions, velocities, and masses reproducibly.
-    Boundary margin guarantees particles start inside the simulation box.
-    Default v_max=4.4, margin=0.8 matches the quantitative Task 1 & 3 baseline (E(0) ~ 77.14 J).
-    """
     rng = np.random.default_rng(seed)
     pos = rng.uniform(margin, L - margin, size=(N, 2)).astype(dtype)
     vel = rng.uniform(-v_max, v_max, size=(N, 2)).astype(dtype)
@@ -24,30 +12,16 @@ def init_state(seed=42, N=12, L=10.0, v_max=4.4, margin=0.8, dtype=np.float64):
     return pos, vel, mass
 
 
-# =============================================================================
-# 2. PAIRWISE DISTANCES & NEIGHBOR DETECTION
-# =============================================================================
+# Pairwise displacements, distances, and neighbor mask
 def pairwise_distances(pos, rc=1.5):
-    """
-    Computes displacement tensor d_ij, Euclidean distance matrix r_ij,
-    and neighbor boolean matrix where 0 < r_ij <= rc.
-    Vectorized using NumPy broadcasting with O(N^2) scaling.
-    """
     d = pos[:, None, :] - pos[None, :, :]
     dist = np.sqrt(np.sum(d * d, axis=-1, dtype=pos.dtype))
     neighbors = (dist > 1e-14) & (dist <= rc)
     return d, dist, neighbors
 
 
-# =============================================================================
-# 3. INTER-PARTICLE FORCES (HOOKEAN SPRING REPULSION)
-# =============================================================================
+# Hookean spring pair forces
 def pair_forces(pos, k=4000.0, r0=0.70, rc=0.70):
-    """
-    Computes total repulsive Hookean spring forces on each particle:
-      F_ij = -k * (r_ij - r0) * (r_ij / ||r_ij||)   for r_ij <= rc (and r_ij > 0)
-    Symmetric and equal-and-opposite (Newton's Third Law).
-    """
     scalar = pos.dtype.type
     d, dist, neighbors = pairwise_distances(pos, rc=rc)
     denom = dist[:, :, None]
@@ -61,12 +35,8 @@ def pair_forces(pos, k=4000.0, r0=0.70, rc=0.70):
     return np.sum(fmag[:, :, None] * u, axis=1, dtype=pos.dtype)
 
 
+# Total force combining spring forces and optional viscous damping
 def total_forces(pos, vel=None, mass=None, gamma=0.0, k=4000.0, r0=0.70, rc=0.70, pair_force_fn=None):
-    """
-    Computes net force on all particles, combining pair repulsion and viscous drag:
-      F_net = F_pair - gamma * v
-    Optionally accepts a custom pair_force_fn (e.g. compiled C kernel).
-    """
     if pair_force_fn is not None:
         F_spring = pair_force_fn(pos, k=k, r0=r0, rc=rc)
     else:
@@ -76,39 +46,24 @@ def total_forces(pos, vel=None, mass=None, gamma=0.0, k=4000.0, r0=0.70, rc=0.70
     return F_spring - vel.dtype.type(gamma) * vel
 
 
-# =============================================================================
-# 4. ENERGIES
-# =============================================================================
+# Kinetic energy
 def kinetic_energy(vel, mass=None):
-    """
-    Calculates total kinetic energy:
-      K = 0.5 * sum_i (m_i * ||v_i||^2)
-    """
     scalar = vel.dtype.type
     if mass is None:
         mass = np.ones(len(vel), dtype=vel.dtype)
     return scalar(0.5) * np.sum(mass[:, None] * (vel * vel), dtype=vel.dtype)
 
 
+# Potential energy
 def potential_energy(pos, k=4000.0, r0=0.70, rc=0.70):
-    """
-    Calculates total Hookean spring potential energy:
-      U = 0.5 * sum_{i < j} k * (r_ij - r0)^2
-    """
     scalar = pos.dtype.type
     _, dist, neighbors = pairwise_distances(pos, rc=rc)
     pair_u = scalar(0.5) * scalar(k) * ((dist - scalar(r0)) ** 2) * neighbors
     return scalar(0.5) * np.sum(pair_u, dtype=pos.dtype)
 
 
-# =============================================================================
-# 5. BOUNDARY CONDITIONS & COLLISIONS
-# =============================================================================
+# Specular wall reflections
 def walls_reflect(pos, vel, L=10.0, radius=0.0):
-    """
-    Elastic boundary condition: reflects particles specularly at box walls [0, L].
-    Clamps positions inside [radius, L - radius] and reverses normal velocity components.
-    """
     scalar = pos.dtype.type
     r_val = scalar(radius)
     L_val = scalar(L) - r_val
@@ -123,11 +78,8 @@ def walls_reflect(pos, vel, L=10.0, radius=0.0):
     return pos, vel
 
 
+# Particle-particle elastic collision handling
 def particle_collisions(pos, vel, radius=0.0):
-    """
-    Elastic hard-core collision response for finite-size circular particles.
-    Used optionally when geometric overlap separation is enabled.
-    """
     if radius <= 0.0:
         return pos, vel
     N_p = len(pos)
@@ -149,15 +101,8 @@ def particle_collisions(pos, vel, radius=0.0):
     return pos, vel
 
 
-# =============================================================================
-# 6. TIME INTEGRATORS: EULER VS VELOCITY VERLET
-# =============================================================================
+# Forward Euler integrator step
 def step_euler(pos, vel, mass, dt, L=10.0, gamma=0.0, k=4000.0, r0=0.70, rc=0.70, radius=0.0):
-    """
-    First-order forward integration step (Euler-Cromer / Forward Euler):
-      v(t + dt) = v(t) + a(t) * dt
-      x(t + dt) = x(t) + v(t) * dt
-    """
     scalar = pos.dtype.type
     dt_val = scalar(dt)
     F = total_forces(pos, vel=vel, mass=mass, gamma=gamma, k=k, r0=r0, rc=rc)
@@ -168,21 +113,12 @@ def step_euler(pos, vel, mass, dt, L=10.0, gamma=0.0, k=4000.0, r0=0.70, rc=0.70
     return pos_new, vel_new
 
 
+# Velocity Verlet integrator step
 def step_verlet(
     pos, vel, mass, dt, L=10.0, gamma=0.0, k=4000.0, r0=0.70, rc=0.70,
     radius=0.0, F_prev=None, force_previous=None, pair_force_fn=None
 ):
-    """
-    Second-order symplectic Velocity Verlet time integrator:
-      v(t + dt/2) = v(t) + 0.5 * a(t) * dt
-      x(t + dt)   = x(t) + v(t + dt/2) * dt
-      [walls reflect on x(t + dt) and v(t + dt/2)]
-      F(t + dt)   = forces(x(t + dt), v(t + dt/2))
-      v(t + dt)   = v(t + dt/2) + 0.5 * a(t + dt) * dt
-    Preserves phase-space volume (symplectic) and bounds energy drift O(dt^2).
-    """
     if isinstance(L, np.ndarray):
-        # Backward-compatibility: caller passed force_previous as 5th positional arg
         if force_previous is None and F_prev is None:
             F_prev = L
         L = 10.0
@@ -210,17 +146,11 @@ def step_verlet(
     return pos_new, vel_new, F_new
 
 
-# =============================================================================
-# 7. GENERAL TRAJECTORY SIMULATION HARNESS
-# =============================================================================
+# Full trajectory simulation runner
 def run_sim(
     dt, T_max, method="verlet", seed=42, gamma=0.0, k=15.0, r0=1.5, rc=1.5,
     L=10.0, N=12, radius=0.0, save_pos=False, dtype=np.float64, v_max=4.4
 ):
-    """
-    Runs a complete trajectory simulation across [0, T_max] with fixed dt.
-    Returns dictionary with time series of t, K, U, E, relative energy error, and mean speed.
-    """
     pos, vel, mass = init_state(seed=seed, N=N, L=L, v_max=v_max, margin=0.8, dtype=dtype)
     n_steps = int(round(T_max / dt))
 

@@ -16,10 +16,10 @@ Usage:
     python3 simulator.py --task1
     python3 simulator.py --verify
 
-    # 3. Task 3 Timestep Accuracy & Energy Conservation Suite (Saves plots in 'task_3 results/')
+    # 3. Task 3 Timestep Accuracy & Energy Conservation Suite (Saves plots in 'Task3_Timestep_Accuracy/results/')
     python3 simulator.py --task3
 
-    # 4. Task 4 Dissipation & Relaxation Suite (Saves plots in 'task_4 results/')
+    # 4. Task 4 Dissipation & Relaxation Suite (Saves plots in 'Task4_Viscous_Dissipation/results/')
     python3 simulator.py --task4
 
     # 5. Automated Sequential Batch: All Tasks (1, 3, and 4)
@@ -50,46 +50,26 @@ from matplotlib.collections import LineCollection
 if __name__ == "__main__" and "simulator" not in sys.modules:
     sys.modules["simulator"] = sys.modules[__name__]
 
-# =============================================================================
-# CENTRALIZED DEFAULT SIMULATION CONFIGURATION
-# =============================================================================
-# Anyone opening this script can adjust these default parameters right here
-# in one single place at the top of the file without digging through code.
-#
-# These defaults govern interactive GUI runs, headless simulations, and presets,
-# and can be dynamically overridden via CLI flags (--radius, --trail-len, --dt,
-# --N, --L, --gamma, --k, --r0, --rc, --method, --preset, etc.).
-# =============================================================================
-
+# Default simulation configuration
 DEFAULT_CONFIG = {
-    # Geometric and Visualization Parameters
-    # SYNCED: For spherical particles of radius R, contact occurs at center-to-center distance d = 2*R.
-    # Hence, the spring rest length r0 = 2 * radius (and conversely radius = r0 / 2).
-    "radius": 0.35,           # Particle ball radius (diameter 2R = 0.70 matches spring rest length r0)
-    "trail_len": 24,          # Length of motion trail / tracer history buffer
-    "N": 16,                  # Number of particles (sweet spot for smooth 60 FPS live visualization)
-    "L": 10.0,                # Box dimensions: [0, L] x [0, L]
-
-    # Time Discretization & Numerical Integrator
-    "dt": 0.0005,             # Simulation time step dt (seconds) - resolves stiff high-velocity contact smoothly
-    "substeps": 8,            # Physics integration sub-steps per animation frame (fast, silky motion)
-    "method": "verlet",       # Integrator: 'verlet' (Velocity Verlet) or 'euler' (Forward Euler)
-    "gamma": 0.0,             # Viscous damping coefficient (0.0 = conservative)
-
-    # Force Field & Potential Parameters (Harmonic Soft Repulsion)
-    # Perfectly synced with visual ball: r0 = 2 * radius (spring engages exact moment visual balls touch)
-    "k": 4000.0,              # Elastic bumper stiffness (scaled for crisp, elastic bounce on contact)
-    "r0": 0.70,               # Equilibrium distance = 2 * radius (exact physical contact threshold)
-    "rc": 0.70,               # Interaction cutoff radius = r0
-
-    # Presets, Initialization & Execution Settings
-    "preset": "conservative", # Default preset mode ('conservative', 'dissipative', 'strong_damping', 'euler_drift')
-    "seed": 42,               # Random number generator seed for reproducible particle distribution
-    "v_max": 10.0,            # Maximum initial particle speed component per axis (energetic & fast)
-    "frames": 1000,           # Maximum animation frames to render
-    "hard_core": False,       # Pure continuous physics (False) vs geometric overlap separation (True)
-    "backend": "numpy",       # Physics force engine: 'numpy' (vectorized) or 'c' (compiled pairforce.c)
-    "dynamic_squish": True,   # Dynamic elastic ball contraction during collisions (squish & rebound)
+    "radius": 0.35,
+    "trail_len": 24,
+    "N": 16,
+    "L": 10.0,
+    "dt": 0.0005,
+    "substeps": 8,
+    "method": "verlet",
+    "gamma": 0.0,
+    "k": 4000.0,
+    "r0": 0.70,
+    "rc": 0.70,
+    "preset": "conservative",
+    "seed": 42,
+    "v_max": 10.0,
+    "frames": 1000,
+    "hard_core": False,
+    "backend": "numpy",
+    "dynamic_squish": True,
 }
 
 # Exposed top-level aliases for direct, convenient access
@@ -107,9 +87,7 @@ DEFAULT_METHOD = DEFAULT_CONFIG["method"]
 DEFAULT_V_MAX = DEFAULT_CONFIG["v_max"]
 DEFAULT_PRESET = DEFAULT_CONFIG["preset"]
 
-# =============================================================================
-# 1. CORE PHYSICS & TASK 1 VERIFICATION IMPORTS
-# =============================================================================
+# Physics and Task 1 imports
 from core.physics import (
     pairwise_distances,
     pair_forces,
@@ -126,32 +104,27 @@ from core.physics import (
 from core.c_kernel import get_c_pair_forces_fn
 from Task1_Verification.task1_verification import verify_task1, run_task_1
 
-# =============================================================================
-# 4. LIVE VISUAL SIMULATION WITH REAL-TIME ENERGY TRACKING (TASK 2)
-# =============================================================================
-
-# Preset definitions specialize the physics regime (e.g. damping, integrator, timestep)
-# while inheriting all geometric and execution defaults dynamically from DEFAULT_CONFIG.
+# Simulation presets
 PRESET_SPECIALIZATIONS = {
     "conservative": {
-        "description": "Conservative dynamics (gamma = 0.0): Total mechanical energy strictly conserved.",
+        "description": "Conservative dynamics (gamma = 0.0)",
         "gamma": 0.0,
         "method": "verlet",
     },
     "dissipative": {
-        "description": "Dissipative damping (gamma = 0.15): Viscous drag drains kinetic energy into steady state.",
+        "description": "Dissipative damping (gamma = 0.15)",
         "gamma": 0.15,
         "dt": 0.01,
         "method": "verlet",
     },
     "strong_damping": {
-        "description": "Heavy damping (gamma = 0.50): Rapid relaxation to arrested equilibrium state.",
+        "description": "Heavy damping (gamma = 0.50)",
         "gamma": 0.50,
         "dt": 0.005,
         "method": "verlet",
     },
     "euler_drift": {
-        "description": "Euler secular heating demo (gamma = 0.0, dt = 0.02): Demonstrates Euler energy divergence.",
+        "description": "Euler energy drift demo",
         "gamma": 0.0,
         "dt": 0.02,
         "method": "euler",
@@ -228,23 +201,15 @@ def run_live_simulation(
     backend = str(backend if backend is not None else p_cfg.get("backend", DEFAULT_CONFIG.get("backend", "numpy"))).lower()
     dynamic_squish = bool(dynamic_squish if dynamic_squish is not None else p_cfg.get("dynamic_squish", DEFAULT_CONFIG.get("dynamic_squish", True)))
 
-    # Force calculation backend selection (NumPy vs Compiled C via pairforce.c)
+    # Force calculation backend selection
     pair_force_fn = None
     if backend == "c":
         try:
             pair_force_fn = get_c_pair_forces_fn()
-            backend_label = "COMPILED C (pairforce.c) [~30x Faster]"
-        except Exception as e:
-            print(f"[BACKEND WARNING] Could not load C kernel ({e}), falling back to NumPy.")
+        except Exception:
             backend = "numpy"
-            backend_label = "NUMPY (vectorized)"
             pair_force_fn = None
-    else:
-        backend_label = "NUMPY (vectorized)"
 
-    # Synchronize physical spring distance (r0, rc) and visual particle radius (R):
-    # Two spherical balls of radius R make physical contact when center distance d = 2 * R.
-    # Therefore, the Hookean spring repulsion must engage at r0 = 2 * radius (and conversely radius = r0 / 2).
     if radius is not None and r0 is None:
         radius = float(radius)
         r0 = 2.0 * radius
@@ -262,76 +227,61 @@ def run_live_simulation(
         r0 = float(r0)
         rc = float(rc if rc is not None else r0)
 
-    print("\n" + "=" * 80)
-    print(f"STARTING LIVE SIMULATION [{preset.upper()}]")
-    print("=" * 80)
-    print(f"Parameters: N={N}, L={L}, dt={dt}, gamma={gamma}, k={k}, r0={r0}, rc={rc}")
-    print(f"Integrator: {method.upper()} | Radius: {radius} | Trail Len: {trail_len} | Substeps: {substeps} | Seed: {seed}")
-    print(f"Engine    : {backend_label} | Elastic Squish: {'ON (Contracts on Collision)' if dynamic_squish else 'OFF'}")
-    print("Close the simulation window to finish.")
-    print("=" * 80 + "\n")
+    print(f"Simulation parameters: N={N}, L={L:.1f}, dt={dt}, gamma={gamma}, k={k:.1f}, method={method}")
+    print(f"Backend: {backend}, seed={seed}")
+    print("Close figure window to terminate.")
 
     if headless:
         matplotlib.use("Agg")
 
-    # 2. Initialize particles
-    # Calculate boundary margin to place particles cleanly inside box walls
+    # Initialize particles
     margin = max(radius + 0.05, min(radius + 0.8, L * 0.45)) if L > 2 * radius else L * 0.1
     pos, vel, mass = init_state(seed=seed, N=N, L=L, v_max=v_max, margin=margin)
 
-    # Initial energies
     K0 = kinetic_energy(vel, mass)
     U0 = potential_energy(pos, k=k, r0=r0, rc=rc)
     E0 = K0 + U0
 
-    # 3. Setup Figure: Left (Box simulation) & Right (Live Energy graph)
-    fig, (ax_sim, ax_energy) = plt.subplots(1, 2, figsize=(14, 6.5))
-    fig.canvas.manager.set_window_title(f"Particle Simulation [{preset}] - {method.upper()}")
+    # Setup two-panel figure
+    fig, (ax_sim, ax_energy) = plt.subplots(1, 2, figsize=(11.0, 5.0))
+    fig.canvas.manager.set_window_title(f"Simulation: N={N}, {method.capitalize()}")
 
-    # --- Left Panel: Particle Motion ---
-    ax_sim.set_xlim(-0.25, L + 0.25)
-    ax_sim.set_ylim(-0.25, L + 0.25)
+    # Left panel: particle positions
+    ax_sim.set_xlim(-0.2, L + 0.2)
+    ax_sim.set_ylim(-0.2, L + 0.2)
     ax_sim.set_aspect("equal")
-    ax_sim.set_title(f"Particle Motion (N={N}, γ={gamma}, {method.upper()})", fontsize=11, fontweight="bold")
-    ax_sim.set_xlabel("X coordinate", fontsize=10)
-    ax_sim.set_ylabel("Y coordinate", fontsize=10)
-    ax_sim.grid(True, linestyle=":", alpha=0.35)
+    ax_sim.set_title(f"Particle Positions (N = {N})", fontsize=11)
+    ax_sim.set_xlabel("x (m)", fontsize=10)
+    ax_sim.set_ylabel("y (m)", fontsize=10)
+    ax_sim.grid(True, linestyle=":", alpha=0.4)
+    ax_sim.plot([0, L, L, 0, 0], [0, 0, L, L, 0], "k-", lw=1.5)
 
-    # Draw box boundary
-    ax_sim.plot([0, L, L, 0, 0], [0, 0, L, L, 0], "k-", lw=2.2, label="Box Walls")
-
-    colors = plt.cm.tab20(np.linspace(0, 1, max(N, 20)))[:N]
-    trails = [ax_sim.plot([], [], "-", color=colors[i], alpha=0.5, lw=1.6)[0] for i in range(N)]
     draw_radius = radius if radius > 0.0 else 0.06
+    trails = [ax_sim.plot([], [], "-", color="#7f8c8d", alpha=0.35, lw=0.9)[0] for _ in range(N)]
     circles = [
-        plt.Circle((pos[i, 0], pos[i, 1]), draw_radius, facecolor=colors[i], edgecolor="black", lw=1.2, zorder=5)
+        plt.Circle((pos[i, 0], pos[i, 1]), draw_radius, facecolor="#2980b9", edgecolor="#1f3a52", lw=0.8, zorder=3)
         for i in range(N)
     ]
     for c in circles:
         ax_sim.add_patch(c)
 
-    # Active collision spring indicators: dynamic connecting line rendered between balls during contact (r <= r0)
-    spring_lines = LineCollection([], colors="#e63946", linewidths=2.4, alpha=0.9, zorder=6)
-    ax_sim.add_collection(spring_lines)
+    # Right panel: energy evolution
+    line_K, = ax_energy.plot([], [], "--", color="#2980b9", lw=1.4, label="Kinetic K(t)")
+    line_U, = ax_energy.plot([], [], ":", color="#e67e22", lw=1.4, label="Potential U(t)")
+    line_E, = ax_energy.plot([], [], "-", color="#2c3e50", lw=1.8, label="Total E(t)")
+    ax_energy.axhline(E0, color="#bdc3c7", linestyle="-.", lw=1.0, label=f"E(0) = {E0:.2f} J")
 
-    # --- Right Panel: Live Energy Graph ---
-    line_K, = ax_energy.plot([], [], color="#1f77b4", lw=1.8, label="Kinetic K(t)")
-    line_U, = ax_energy.plot([], [], color="#ff7f0e", lw=1.8, label="Potential U(t)")
-    line_E, = ax_energy.plot([], [], color="#2ca02c", lw=2.4, label="Total E_tot(t)")
-    ax_energy.axhline(E0, color="#7f7f7f", linestyle="--", lw=1.2, alpha=0.7, label=f"E(0) = {E0:.2f}")
-
-    ax_energy.set_title("Real-Time Energy Tracking: K(t), U(t), E_tot(t)", fontsize=11, fontweight="bold")
-    ax_energy.set_xlabel("Time t (s)", fontsize=10)
-    ax_energy.set_ylabel("Mechanical Energy", fontsize=10)
+    ax_energy.set_title("Mechanical Energy vs Time", fontsize=11)
+    ax_energy.set_xlabel("Time (s)", fontsize=10)
+    ax_energy.set_ylabel("Energy (J)", fontsize=10)
     ax_energy.set_xlim(0, max(5.0, dt * 100))
     ax_energy.set_ylim(0, max(E0 * 1.35, 20.0))
     ax_energy.grid(True, linestyle="--", alpha=0.4)
-    ax_energy.legend(loc="upper right", fontsize=8.5, framealpha=0.9)
+    ax_energy.legend(loc="upper right", fontsize=8.5)
 
-    hud_text = ax_energy.text(
-        0.03, 0.95, "", transform=ax_energy.transAxes,
-        verticalalignment="top", fontsize=9, fontfamily="monospace",
-        bbox=dict(boxstyle="round,pad=0.45", facecolor="#f8f9fa", edgecolor="#ced4da", alpha=0.92)
+    status_text = ax_energy.text(
+        0.03, 0.94, "", transform=ax_energy.transAxes,
+        fontsize=8.5, fontfamily="monospace", verticalalignment="top"
     )
 
     # Animation state buffers
@@ -387,71 +337,48 @@ def run_live_simulation(
             for i in range(N):
                 trails[i].set_data([], [])
 
-        # Active collision spring indicators & Dynamic elastic ball contraction (squish & rebound)
-        _, dist_mat, neigh_mat = pairwise_distances(pos, rc=r0)
-        contact_pairs = []
-        for i in range(N):
-            for j in range(i + 1, N):
-                if neigh_mat[i, j]:
-                    contact_pairs.append([pos[i], pos[j]])
-        spring_lines.set_segments(contact_pairs)
-
         if dynamic_squish:
-            # Inter-particle compressive deformation (r0 - dist)
+            _, dist_mat, neigh_mat = pairwise_distances(pos, rc=r0)
             pair_comp = np.where(neigh_mat, r0 - dist_mat, 0.0)
             max_pair_comp = np.max(pair_comp, axis=1) if N > 1 else np.zeros(N)
 
-            # Wall collision compressive deformation
             wall_comp_x = np.maximum(0.0, np.maximum(draw_radius - pos[:, 0], pos[:, 0] - (L - draw_radius)))
             wall_comp_y = np.maximum(0.0, np.maximum(draw_radius - pos[:, 1], pos[:, 1] - (L - draw_radius)))
             max_wall_comp = np.maximum(wall_comp_x, wall_comp_y)
 
             total_comp = np.maximum(max_pair_comp, max_wall_comp)
-            alpha_squish = 0.35
-            r_min = 0.65 * draw_radius
-            dyn_radii = np.maximum(r_min, draw_radius - alpha_squish * total_comp)
+            r_dyn = np.maximum(0.70 * draw_radius, draw_radius - 0.25 * total_comp)
 
             for i in range(N):
                 circles[i].center = (pos[i, 0], pos[i, 1])
-                circles[i].set_radius(dyn_radii[i])
+                circles[i].set_radius(r_dyn[i])
         else:
             for i in range(N):
                 circles[i].center = (pos[i, 0], pos[i, 1])
 
-        # Update energy curves
         line_K.set_data(t_hist, K_hist)
         line_U.set_data(t_hist, U_hist)
         line_E.set_data(t_hist, E_hist)
 
-        # Dynamic axis scaling for energy panel
         cur_t = t_curr[0]
         if cur_t >= ax_energy.get_xlim()[1] * 0.95:
-            ax_energy.set_xlim(0, max(5.0, cur_t * 1.4))
+            ax_energy.set_xlim(0, max(5.0, cur_t * 1.3))
 
         all_e = K_hist + U_hist + E_hist
         max_e = max(all_e)
-        min_e = min(all_e)
-        curr_y_min, curr_y_max = ax_energy.get_ylim()
-        if max_e > curr_y_max * 0.92 or min_e < curr_y_min:
-            ax_energy.set_ylim(min(0.0, min_e - 2.0), max(curr_y_max, max_e * 1.25 + 5.0))
+        if max_e > ax_energy.get_ylim()[1] * 0.9:
+            ax_energy.set_ylim(0, max_e * 1.25 + 5.0)
 
-        # Update HUD text
         rel_err = abs(E - E0) / E0 if E0 > 0 else 0.0
-        hud_text.set_text(
-            f"t       = {cur_t:6.2f} s\n"
-            f"K(t)    = {K:6.2f} J\n"
-            f"U(t)    = {U:6.2f} J\n"
-            f"E_tot   = {E:6.2f} J\n"
-            f"|ΔE|/E0 = {rel_err:.2e}"
+        status_text.set_text(
+            f"t = {cur_t:5.2f} s  |  E = {E:5.2f} J  |  |ΔE|/E0 = {rel_err:.2e}"
         )
 
-        return circles + trails + [spring_lines, line_K, line_U, line_E, hud_text]
+        return circles + trails + [line_K, line_U, line_E, status_text]
 
     if headless and not save_anim:
-        print(f"Running headless simulation for {frames} frames...")
         for f in range(frames):
             update(f)
-        print(f"Headless run completed {frames} steps. Final E_tot = {E_hist[-1]:.4f} J (K = {K_hist[-1]:.4f} J, U = {U_hist[-1]:.4f} J).")
         return None
 
     anim = FuncAnimation(fig, update, frames=frames, interval=25, blit=False)
@@ -459,12 +386,10 @@ def run_live_simulation(
 
     if save_anim:
         out_path = Path(save_anim).resolve()
-        print(f"Saving animation to {out_path} ...")
         if out_path.suffix.lower() == ".gif":
             anim.save(str(out_path), writer="pillow", fps=30)
         else:
             anim.save(str(out_path), fps=30)
-        print("Animation saved successfully.")
     else:
         plt.show()
 
@@ -545,31 +470,7 @@ def run_all_tasks():
     print("=" * 86)
 
 
-# =============================================================================
-# 6. ARCHITECTURAL OVERVIEW & TASK MODULE ROADMAP
-# =============================================================================
-"""
-Architecture Summary:
-- Unified Physics Core (task3_4.py):
-    Shared vectorised functions for pairwise distances, Hookean pair forces,
-    symplectic Velocity Verlet integration, kinetic/potential energy calculations,
-    and elastic wall reflections. All other task scripts import from here.
-- Task 5 (Task5_2D_Report_and_Results/task5_precision_2d.py):
-    Precision study (float32 vs float64) measuring energy drift and Lyapunov trajectory divergence.
-- Task 6 (Task6_Revised_2D/task6_benchmark.py):
-    Computational benchmarking comparing pure Python double loop, vectorized NumPy,
-    and the compiled C kernel (pairforce.c via ctypes, achieving >70x speedup).
-- Task 7 (fosc task 7 CODE.py):
-    Displacement tensor memory scaling (2D vs 3D) and analytical Out-Of-Memory limit estimation.
-- Interactive GUI & Engine (simulator.py):
-    Live multi-panel particle animation with dynamic elastic ball squish on collision,
-    optional compiled C backend acceleration (--backend c), and modular task dispatching.
-"""
-
-
-# =============================================================================
-# 7. COMMAND LINE ENTRY POINT & MAIN ROUTER
-# =============================================================================
+# Command line argument parser
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -586,11 +487,11 @@ def parse_args():
     )
     parser.add_argument(
         "--task3", action="store_true",
-        help="Run Task 3 numerical experiments (dt scan, energy conservation, convergence, save plots in 'task_3 results/')."
+        help="Run Task 3 numerical experiments (dt scan, energy conservation, convergence, save plots in 'Task3_Timestep_Accuracy/results/')."
     )
     parser.add_argument(
         "--task4", action="store_true",
-        help="Run Task 4 numerical experiments (viscous damping scan, relaxation times, save plots in 'task_4 results/')."
+        help="Run Task 4 numerical experiments (viscous damping scan, relaxation times, save plots in 'Task4_Viscous_Dissipation/results/')."
     )
     parser.add_argument(
         "--task5", action="store_true",
