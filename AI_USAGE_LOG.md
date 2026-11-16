@@ -7,9 +7,7 @@ All physics formulations, governing equations of motion, numerical integration s
 Generative AI assistance (Claude 3.5 Sonnet / ChatGPT-4o) was utilized strictly as an interactive programming reference for boilerplate syntax, Python library API documentation, and foreign-function plumbing. Specifically:
 - **What AI was used for**:
   1. Standard library syntax lookup (Python `ctypes` argument type bindings and dynamic library loading across OS platforms).
-  2. Matplotlib layout scaffolding (`plt.subplots(1, 2)` configuration, dynamic limits updates in `FuncAnimation`).
-  3. Scaffolding standard CLI argument parsing with `argparse`.
-  4. CSV file writing loops using the standard `csv` library.
+  2. Matplotlib layout (`plt.subplots(1, 2)` configuration, dynamic limits updates in `FuncAnimation`).
 - **What AI was NOT used for**:
   1. No physics equations or governing dynamics were derived by AI.
   2. No numerical integrators or stability proofs were designed by AI.
@@ -41,4 +39,4 @@ We affirm on our academic honor that:
 1. The mathematical derivations, physics kernels, and scientific deductions contained in this repository are our original work.
 2. The AI usage listed above was conducted responsibly and strictly within the scope of syntax and formatting utility.
 3. Every line of code generated with AI assistance was independently checked for mathematical correctness and verified against analytical solutions.
-4. Some casual usage of AI(for syntax, seeing function parameters and understanding some ideas related to general physics) was done.
+4. Some casual usage of AI(for syntax, seeing function parameters and understanding some ideas related to general physics) was done and may have missed documentation due to the informal nature of it.
