@@ -63,7 +63,7 @@ def get_c_pair_forces_fn():
     c_fn.restype = None
 
     # Python wrapper function
-    def pair_forces_c(pos, k=4000.0, r0=0.70, rc=0.70):
+    def pair_forces_c(pos, k=15.0, r0=1.5, rc=1.5):
         N = len(pos)
         pos_c = np.ascontiguousarray(pos, dtype=np.float64)
         F_c = np.zeros((N, 2), dtype=np.float64)

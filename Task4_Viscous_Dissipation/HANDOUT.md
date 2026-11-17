@@ -19,7 +19,25 @@ Recognizing that $\sum \mathbf{F}^{\text{spring}} \cdot \mathbf{v} = -dU/dt$ and
 $$\frac{d(K + U)}{dt} = -2\gamma K(t) \le 0$$
 Because $K(t) \ge 0$ and $\gamma \ge 0$, total mechanical energy decreases monotonically ($dE/dt \le 0$) until all kinetic motion ceases ($K \to 0$).
 
-### 2.2 Relaxation Criteria
+### 2.2 Numerical Integration of Damping in Velocity Verlet
+Unlike conservative forces that depend solely on position $\mathbf{r}$, Stokes drag depends linearly on velocity $\mathbf{v}$. In our implementation, damping is incorporated directly into the force evaluation during the kick steps:
+$$\mathbf{F}_{\text{total}}(\mathbf{r}, \mathbf{v}) = \mathbf{F}_{\text{spring}}(\mathbf{r}) - \gamma m \mathbf{v}$$
+
+The resulting discrete updates proceed as:
+1. **Half-Step Velocity Kick**:
+   $$\mathbf{v}\left(t + \frac{\Delta t}{2}\right) = \mathbf{v}(t) + \frac{1}{2}\left(\frac{\mathbf{F}_{\text{spring}}(\mathbf{r}(t))}{m} - \gamma \mathbf{v}(t)\right)\Delta t = \mathbf{v}(t)\left(1 - \frac{1}{2}\gamma \Delta t\right) + \frac{1}{2}\mathbf{a}_{\text{spring}}(t)\Delta t$$
+2. **Full-Step Position Drift & Wall Reflection**:
+   $$\mathbf{r}(t + \Delta t) = \mathbf{r}(t) + \mathbf{v}\left(t + \frac{\Delta t}{2}\right)\Delta t$$
+   $$\text{[Apply specular wall reflection on } \mathbf{r}(t + \Delta t) \text{ and } \mathbf{v}(t + \Delta t/2)\text{]}$$
+3. **Second Half-Step Velocity Kick**:
+   $$\mathbf{v}(t + \Delta t) = \mathbf{v}\left(t + \frac{\Delta t}{2}\right)\left(1 - \frac{1}{2}\gamma \Delta t\right) + \frac{1}{2}\frac{\mathbf{F}_{\text{spring}}(\mathbf{r}(t + \Delta t))}{m}\Delta t$$
+
+#### Connection to Exponential Operator Splitting
+Notice that the damping multiplier $\left(1 - \frac{1}{2}\gamma \Delta t\right)$ is the first-order Taylor polynomial of the exact analytic propagator $\exp\left(-\frac{1}{2}\gamma \Delta t\right)$:
+$$\exp\left(-\frac{1}{2}\gamma \Delta t\right) = 1 - \frac{1}{2}\gamma \Delta t + \frac{1}{8}(\gamma \Delta t)^2 + \mathcal{O}((\gamma \Delta t)^3)$$
+In our experiments, with maximum $\gamma = 0.50\text{ s}^{-1}$ and $\Delta t = 0.005\text{ s}$, the dimensionless parameter is $\gamma \Delta t = 0.0025 \ll 1$. The relative truncation error between direct half-step evaluation and exponential splitting is $\frac{1}{8}(\gamma \Delta t)^2 \approx 7.8 \times 10^{-7}$, well within normal integrator tolerances while maintaining unconditional numerical stability.
+
+### 2.3 Relaxation Criteria
 We define the system to have reached steady-state mechanical equilibrium when:
 1. **Velocity Criterion**: Mean speed $\langle \|\mathbf{v}\| \rangle < 10^{-3}\text{ m/s}$ over a 2.0-second time window.
 2. **Energy Gradient Criterion**: Relative energy decay $|dE/dt| / E_0 < 10^{-3}$.
@@ -57,4 +75,4 @@ Generated plots saved in `Task4_Viscous_Dissipation/results/`:
 > *Defense*: The internal spring forces continue to satisfy Newton's Third Law exactly ($\mathbf{F}_{ij} = -\mathbf{F}_{ji}$). However, the viscous drag force $-\gamma m \mathbf{v}$ represents momentum exchange with an external fluid reservoir, so the net external force on the system is non-zero during dissipation.
 
 **Q3: How is viscous damping integrated in Velocity Verlet without introducing numerical instability?**
-> *Defense*: Using an operator-split approach, velocity is updated using half-step accelerations combined with damping decay factors $c = \exp(-\gamma \Delta t / 2) \approx 1 - \gamma \Delta t / 2$, preserving second-order accuracy and preventing numerical divergence even at high damping coefficients.
+> *Defense*: Viscous drag is evaluated directly in the half-step velocity kick updates ($\mathbf{a} = \mathbf{F}_{\text{spring}}/m - \gamma \mathbf{v}$), which scales velocity by $\left(1 - \frac{1}{2}\gamma \Delta t\right)$ on each half-step. Because this factor is the first-order approximation of the exact propagator $\exp\left(-\frac{1}{2}\gamma \Delta t\right)$ and our dimensionless parameter satisfies $\gamma \Delta t = 0.0025 \ll 1$, the update remains linearly stable, second-order accurate, and avoids numerical divergence without requiring iterative implicit solvers.

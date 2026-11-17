@@ -77,6 +77,8 @@ python3 simulator.py --task8
 
 ### Measured Performance & Work Reduction Summary
 
+### 3.1 Algorithmic Complexity Scaling ($k=15.0, r_0=0.8, r_c=2.0$, Constant Density $\rho = 0.12$)
+
 | Particle Count $N$ | All-Pairs Checks ($N^2$) | Cell List Candidates | Interacting Pairs | Work Reduction | Speedup ($t_{\text{vec}} / t_{\text{cell}}$) | Peak Memory Reduction |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | **50** | $2,500$ | $260$ | $42$ | $9.6\times$ | $0.8\times$ (overhead) | $200\text{ KB} \to 20\text{ KB}$ |
@@ -86,6 +88,16 @@ python3 simulator.py --task8
 | **5,000** | $25,000,000$ | $26,140$ | $3,735$ | **$956.4\times$** | **$770.0\times$** | $1,625\text{ MB} \to 1.4\text{ MB}$ |
 | **20,000** | $400,000,000$ | $105,568$ | $15,038$ | **$3,789.0\times$** | **$> 1,500\times$** | $> 26\text{ GB} \to 5.3\text{ MB}$ |
 | **100,000** | $10^{10}$ (OOM crash) | $528,000$ | $75,200$ | **$> 18,000\times$** | **$\infty$ (Runs in $56\text{ ms}$)** | $> 150\text{ GB} \to 27.0\text{ MB}$ |
+
+### 3.2 Simulator Physical Configuration Validation (Fixed Domain $L = 10.0$)
+To ensure that spatial partitioning introduces no physical artifacts into the main simulator, we distinguish algorithmic scaling from runtime physical validation by directly benchmarking the cell list against the vectorized all-pairs engine under the simulator's active configurations:
+
+| Configuration | Parameters ($N, L, k, r_0, r_c, \Delta t$) | Instantaneous Force Residual $\| \mathbf{F}_{\text{all-pairs}} - \mathbf{F}_{\text{cell}} \|_\infty$ | 200-Step Trajectory Error $\| \mathbf{r}_{\text{all-pairs}} - \mathbf{r}_{\text{cell}} \|_\infty$ | Energy Invariance |
+| :--- | :--- | :--- | :--- | :--- |
+| **Canonical Academic Preset** | $N=12, L=10.0, k=15.0, r_0=1.5, r_c=1.5, \Delta t=0.005$ | $\mathbf{2.22 \times 10^{-16}\text{ N}}$ | $\mathbf{0.00 \times 10^{0}\text{ m}}$ (Bitwise Identical) | Exact overlap ($< 10^{-15}$) |
+| **Stiff Billiards Preset** | $N=16, L=10.0, k=4000.0, r_0=0.70, r_c=0.70, \Delta t=0.0005$ | $\mathbf{0.00 \times 10^{0}\text{ N}}$ | $\mathbf{0.00 \times 10^{0}\text{ m}}$ (Bitwise Identical) | Exact overlap ($< 10^{-15}$) |
+
+*Verification Result*: In both physical regimes, the cell list produces zero trajectory discrepancy after hundreds of integration steps, demonstrating that it is an exact, bitwise drop-in replacement for all-pairs evaluation.
 
 ### Generated Output Artifacts in `results/`
 1. **`task8_fig0_cell_diagram.png`**: Visual schematic illustrating the $L \times L$ grid partition, a host particle, its circular interaction radius $r_c$, and the highlighted $3 \times 3$ candidate stencil.
@@ -97,6 +109,7 @@ python3 simulator.py --task8
 5. **`task8_correctness.csv`**: Machine-precision force residual metrics across multiple system sizes.
 6. **`task8_timing.csv`**: Measured median execution times and peak memory allocations.
 7. **`task8_candidates.csv`**: Distance checks count and work reduction factors.
+8. **`task8_simulator_validation.csv`**: Force and trajectory residuals under the canonical and stiff billiards simulator configurations.
 
 ---
 
@@ -108,8 +121,11 @@ python3 simulator.py --task8
 **Q2: Why does the cell list approach achieve $\mathcal{O}(N)$ complexity only at constant density?**
 > *Answer*: At constant density $\rho = N / L^2$, the physical area of the simulation domain grows proportionally with $N$ ($L \propto \sqrt{N}$), so the total number of cells increases proportionally with $N$ while the average number of particles per cell remains constant ($\approx \rho r_c^2 = \text{const}$). Each particle only interacts with a constant $\mathcal{O}(1)$ number of neighbors, yielding $N \times \mathcal{O}(1) = \mathcal{O}(N)$ total operations. If the box size $L$ remained fixed while $N \to \infty$, the number of particles per cell would grow as $\mathcal{O}(N)$, causing the stencil search to degrade back to $\mathcal{O}(N^2)$.
 
-**Q3: How do we enforce Newton's third law ($\mathbf{F}_{ij} = -\mathbf{F}_{ji}$) without double-counting pairs?**
+**Q3: How do we distinguish algorithmic validation from physical validation in this task?**
+> *Answer*: Algorithmic validation requires varying $N$ across four orders of magnitude ($N=50$ to $100,000$) in an expanding domain at constant density $\rho = 0.12$ ($k=15.0, r_0=0.8, r_c=2.0$) to isolate asymptotic computational and memory complexity from finite-size density changes. In contrast, physical validation tests the exact active configurations of our main simulator (fixed box $L=10.0$, canonical $k=15.0, r_0=1.5, r_c=1.5$ and stiff $k=4000.0, r_0=0.70, r_c=0.70$), verifying that trajectory divergence is literally $0.00\text{ m}$ after 200 Verlet steps.
+
+**Q4: How do we enforce Newton's third law ($\mathbf{F}_{ij} = -\mathbf{F}_{ji}$) without double-counting pairs?**
 > *Answer*: When inspecting candidate cells around host cell $(c_x, c_y)$, we enforce the ordering condition $j > i$. When computing the force $\mathbf{f}_{ij}$ between pair $(i, j)$, it is accumulated positively into particle $i$'s force vector and negatively into particle $j$'s force vector. This simultaneously guarantees exact momentum conservation ($\sum \mathbf{F} = \mathbf{0}$) and halves the distance arithmetic.
 
-**Q4: How does this implementation avoid Python loop overhead without allocating large $(N, N)$ arrays?**
+**Q5: How does this implementation avoid Python loop overhead without allocating large $(N, N)$ arrays?**
 > *Answer*: Rather than using nested Python loops over particles, we bin particles using `np.argsort` and expand the candidate indices for each of the 9 cell offsets in vector operations using `np.repeat` and `np.cumsum`. Force contributions are then scattered back into particle force arrays using compiled NumPy `np.bincount`, ensuring C-speed execution with zero $(N, N)$ matrix allocations.

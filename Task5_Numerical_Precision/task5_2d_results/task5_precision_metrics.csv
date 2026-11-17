@@ -2,7 +2,7 @@ metric,float32,float64,ratio_or_note
 state_memory_bytes,240,480,2.0000
 pair_memory_bytes,1872,3600,1.9231
 total_tracked_memory_bytes,2112,4080,1.9318
-median_runtime_seconds,0.058717,0.057116,1.0280
+median_runtime_seconds,0.060098,0.058600,1.0256
 initial_total_energy,77.142555,77.142551,exact initial state
 final_total_energy,76.910179,76.902022,at T=10s
 max_relative_energy_drift,3.028613e-03,3.124846e-03,bounded oscillation

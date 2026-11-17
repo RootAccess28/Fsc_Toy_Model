@@ -50,22 +50,22 @@ from matplotlib.collections import LineCollection
 if __name__ == "__main__" and "simulator" not in sys.modules:
     sys.modules["simulator"] = sys.modules[__name__]
 
-# Default simulation configuration
+# Default simulation configuration (Canonical Academic Benchmark)
 DEFAULT_CONFIG = {
-    "radius": 0.35,
+    "radius": 0.75,
     "trail_len": 24,
-    "N": 16,
+    "N": 12,
     "L": 10.0,
-    "dt": 0.0005,
-    "substeps": 8,
+    "dt": 0.005,
+    "substeps": 4,
     "method": "verlet",
     "gamma": 0.0,
-    "k": 4000.0,
-    "r0": 0.70,
-    "rc": 0.70,
-    "preset": "conservative",
+    "k": 15.0,
+    "r0": 1.5,
+    "rc": 1.5,
+    "preset": "canonical",
     "seed": 42,
-    "v_max": 10.0,
+    "v_max": 4.4,
     "frames": 1000,
     "hard_core": False,
     "backend": "numpy",
@@ -106,26 +106,52 @@ from Task1_Verification.task1_verification import verify_task1, run_task_1
 
 # Simulation presets
 PRESET_SPECIALIZATIONS = {
+    "canonical": {
+        "description": "Canonical benchmark configuration (k=15.0, r0=1.5, rc=1.5, gamma=0.0)",
+        "gamma": 0.0,
+        "k": 15.0,
+        "r0": 1.5,
+        "rc": 1.5,
+        "dt": 0.005,
+        "N": 12,
+        "radius": 0.75,
+        "method": "verlet",
+    },
     "conservative": {
         "description": "Conservative dynamics (gamma = 0.0)",
         "gamma": 0.0,
+        "k": 15.0,
+        "r0": 1.5,
+        "rc": 1.5,
         "method": "verlet",
     },
     "dissipative": {
-        "description": "Dissipative damping (gamma = 0.15)",
-        "gamma": 0.15,
-        "dt": 0.01,
-        "method": "verlet",
-    },
-    "strong_damping": {
-        "description": "Heavy damping (gamma = 0.50)",
+        "description": "Dissipative damping benchmark (gamma = 0.50 s^-1)",
         "gamma": 0.50,
         "dt": 0.005,
+        "k": 15.0,
+        "r0": 1.5,
+        "rc": 1.5,
+        "method": "verlet",
+    },
+    "billiards": {
+        "description": "Stiff repulsive potential for visual hard-sphere billiards (k=4000.0, r0=0.70, rc=0.70)",
+        "gamma": 0.0,
+        "k": 4000.0,
+        "r0": 0.70,
+        "rc": 0.70,
+        "dt": 0.0005,
+        "N": 16,
+        "radius": 0.35,
+        "substeps": 8,
         "method": "verlet",
     },
     "euler_drift": {
-        "description": "Euler energy drift demo",
+        "description": "Forward Euler secular energy drift demo (dt = 0.02 s)",
         "gamma": 0.0,
+        "k": 15.0,
+        "r0": 1.5,
+        "rc": 1.5,
         "dt": 0.02,
         "method": "euler",
     },
@@ -211,7 +237,7 @@ def run_live_simulation(
             pair_force_fn = None
     elif backend in ("cell", "cell_list"):
         from core.physics import pair_forces_cell
-        pair_force_fn = lambda pos, k=4000.0, r0=0.70, rc=0.70: pair_forces_cell(pos, L=L, k=k, r0=r0, rc=rc)
+        pair_force_fn = lambda pos, k=k, r0=r0, rc=rc: pair_forces_cell(pos, L=L, k=k, r0=r0, rc=rc)
 
     if radius is not None and r0 is None:
         radius = float(radius)

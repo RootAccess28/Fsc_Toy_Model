@@ -278,6 +278,52 @@ def exp_candidates(out_dir=OUT):
              rows, out_dir=out_dir)
 
 
+# Experiment 6: Verification under simulator physical configurations (Fixed Box L = 10.0)
+def exp_simulator_verification(out_dir=OUT):
+    print("\n--- EXPERIMENT 6: Verification under Simulator Physical Configurations ---")
+    from core.physics import init_state, step_verlet
+    rows = []
+
+    # 1. Canonical Configuration (k=15.0, r0=1.5, rc=1.5, N=12, L=10.0)
+    pos, vel, mass = init_state(seed=42, N=12, L=10.0, dtype=np.float64)
+    F_vec = pair_forces_vec(pos, k=15.0, r0=1.5, rc=1.5)
+    F_cel = pair_forces_cell(pos, L=10.0, k=15.0, r0=1.5, rc=1.5)
+    dF_canon = float(np.max(np.abs(F_vec - F_cel)))
+
+    p_v, v_v = pos.copy(), vel.copy()
+    p_c, v_c = pos.copy(), vel.copy()
+    Fp_v, Fp_c = None, None
+    for _ in range(200):
+        p_v, v_v, Fp_v = step_verlet(p_v, v_v, mass, dt=0.005, L=10.0, k=15.0, r0=1.5, rc=1.5, F_prev=Fp_v)
+        p_c, v_c, Fp_c = step_verlet(p_c, v_c, mass, dt=0.005, L=10.0, k=15.0, r0=1.5, rc=1.5, F_prev=Fp_c,
+                                     pair_force_fn=lambda p, k=15.0, r0=1.5, rc=1.5: pair_forces_cell(p, L=10.0, k=k, r0=r0, rc=rc))
+    dpos_canon = float(np.max(np.abs(p_v - p_c)))
+    print(f"Canonical (k=15.0, r0=1.5, rc=1.5, N=12): Force max|dF| = {dF_canon:.2e} N | 200-step max|dr| = {dpos_canon:.2e} m")
+    rows.append(["canonical_k15_r0_1.5", 12, 10.0, 15.0, 1.5, 1.5, dF_canon, dpos_canon])
+
+    # 2. Billiards Stiff Configuration (k=4000.0, r0=0.70, rc=0.70, N=16, L=10.0)
+    pos_b, vel_b, mass_b = init_state(seed=42, N=16, L=10.0, dtype=np.float64)
+    F_vec_b = pair_forces_vec(pos_b, k=4000.0, r0=0.70, rc=0.70)
+    F_cel_b = pair_forces_cell(pos_b, L=10.0, k=4000.0, r0=0.70, rc=0.70)
+    dF_bill = float(np.max(np.abs(F_vec_b - F_cel_b)))
+
+    p_v, v_v = pos_b.copy(), vel_b.copy()
+    p_c, v_c = pos_b.copy(), vel_b.copy()
+    Fp_v, Fp_c = None, None
+    for _ in range(200):
+        p_v, v_v, Fp_v = step_verlet(p_v, v_v, mass_b, dt=0.0005, L=10.0, k=4000.0, r0=0.70, rc=0.70, F_prev=Fp_v)
+        p_c, v_c, Fp_c = step_verlet(p_c, v_c, mass_b, dt=0.0005, L=10.0, k=4000.0, r0=0.70, rc=0.70, F_prev=Fp_c,
+                                     pair_force_fn=lambda p, k=4000.0, r0=0.70, rc=0.70: pair_forces_cell(p, L=10.0, k=k, r0=r0, rc=rc))
+    dpos_bill = float(np.max(np.abs(p_v - p_c)))
+    print(f"Billiards (k=4000, r0=0.7, rc=0.7, N=16): Force max|dF| = {dF_bill:.2e} N | 200-step max|dr| = {dpos_bill:.2e} m")
+    rows.append(["billiards_k4000_r0_0.7", 16, 10.0, 4000.0, 0.7, 0.7, dF_bill, dpos_bill])
+
+    save_csv("task8_simulator_validation.csv",
+             ["configuration", "N", "L", "k", "r0", "rc", "max_abs_force_diff", "step200_max_pos_diff"],
+             rows, out_dir=out_dir)
+    return rows
+
+
 # Generate publication-standard Matplotlib figures
 def make_plots(T, sim, out_dir=OUT):
     N = T[:, 0]
@@ -410,6 +456,7 @@ def run_task_8(fast=False, output_dir=None):
         exp_breakdown()
     sim = exp_simulation(fast=fast)
     exp_candidates(out_dir=target_out)
+    exp_simulator_verification(out_dir=target_out)
     make_plots(T, sim, out_dir=target_out)
     make_cell_picture(out_dir=target_out)
 

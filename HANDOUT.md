@@ -43,19 +43,34 @@ Elastic specular reflection is applied at container walls $[0, L] \times [0, L]$
 - Particles crossing $x \le 0$ or $x \ge L$ have their normal velocity inverted ($v_x \leftarrow -v_x$) and position clamped to the boundary.
 - Particles crossing $y \le 0$ or $y \ge L$ have $v_y \leftarrow -v_y$.
 
+### 1.5 Physical Configuration Standardization
+To avoid confounding results from differing physical parameters, the codebase distinguishes and standardizes two physical regimes:
+1. **Canonical Academic Benchmark Regime (Tasks 1, 3, 4, 5, 6, 7 & Default Simulator)**:
+   - System size: $N = 12$ particles in a domain $L = 10.0$.
+   - Potential parameters: Spring stiffness $k = 15.0$, equilibrium rest length $r_0 = 1.5$, cutoff radius $r_c = 1.5$.
+   - Integration timestep: $\Delta t = 0.005\text{ s}$ (Velocity Verlet).
+   - Damping: Conservative $\gamma = 0.0\text{ s}^{-1}$ (except in Task 4 where $\gamma \in [0.05, 0.50]$).
+2. **Algorithmic Scaling Regime (Task 8 Asymptotic Complexity)**:
+   - Evaluates system sizes from $N = 50$ to $N = 100,000$ in an expanding box $L(N) = 10\sqrt{N/12}$ to maintain constant area density $\rho = 0.12$.
+   - Interaction parameters: $k = 15.0, r_0 = 0.8, r_c = 2.0$.
+   - Note: Task 8 is also validated under the Canonical and Stiff Billiards simulator regimes in a fixed box $L=10.0$, demonstrating bitwise exact agreement ($0.00\text{ m}$ trajectory difference).
+3. **Stiff Billiards Visual Preset (`--preset billiards`)**:
+   - $N = 16, L = 10.0, k = 4000.0, r_0 = 0.70, r_c = 0.70, \Delta t = 0.0005\text{ s}$.
+
 ---
 
 ## 2. Numerical Integration Schemes
 
-### 2.1 Velocity Verlet (Symplectic, Second-Order)
-The system is integrated using the kick-drift-kick splitting:
-$$\mathbf{v}\left(t + \frac{\Delta t}{2}\right) = \mathbf{v}(t) + \frac{1}{2} \mathbf{a}(t) \Delta t$$
-$$\mathbf{r}(t + \Delta t) = \mathbf{r}(t) + \mathbf{v}\left(t + \frac{\Delta t}{2}\right) \Delta t$$
-$$\text{[Apply wall boundary conditions on } \mathbf{r}(t + \Delta t) \text{ and } \mathbf{v}(t + \Delta t/2) \text{]}$$
-$$\mathbf{a}(t + \Delta t) = \frac{1}{m} \mathbf{F}\left(\mathbf{r}(t + \Delta t)\right)$$
-$$\mathbf{v}(t + \Delta t) = \mathbf{v}\left(t + \frac{\Delta t}{2}\right) + \frac{1}{2} \mathbf{a}(t + \Delta t) \Delta t$$
+### 2.1 Velocity Verlet with Direct Drag Incorporation
+For damped systems ($\gamma > 0$), Stokes drag $\mathbf{F}_{\text{diss}} = -\gamma m \mathbf{v}$ is evaluated directly in the half-step velocity kick updates:
+$$\mathbf{v}\left(t + \frac{\Delta t}{2}\right) = \mathbf{v}(t) + \frac{1}{2}\left(\frac{\mathbf{F}_{\text{spring}}(t)}{m} - \gamma \mathbf{v}(t)\right)\Delta t = \mathbf{v}(t)\left(1 - \frac{1}{2}\gamma \Delta t\right) + \frac{1}{2}\mathbf{a}_{\text{spring}}(t)\Delta t$$
+$$\mathbf{r}(t + \Delta t) = \mathbf{r}(t) + \mathbf{v}\left(t + \frac{\Delta t}{2}\right)\Delta t$$
+$$\text{[Apply specular wall reflections on } \mathbf{r}(t + \Delta t) \text{ and } \mathbf{v}(t + \Delta t/2)\text{]}$$
+$$\mathbf{v}(t + \Delta t) = \mathbf{v}\left(t + \frac{\Delta t}{2}\right)\left(1 - \frac{1}{2}\gamma \Delta t\right) + \frac{1}{2}\frac{\mathbf{F}_{\text{spring}}(t + \Delta t)}{m}\Delta t$$
 
-Because Velocity Verlet is symplectic, it preserves phase-space volume (Liouville's theorem), preventing secular energy drift over long integration times.
+The factor $\left(1 - \frac{1}{2}\gamma \Delta t\right)$ represents the first-order Taylor expansion of the exact exponential damping propagator $\exp(-\frac{1}{2}\gamma \Delta t)$. Because $\gamma \Delta t = 0.0025 \ll 1$ in our runs, this formulation is unconditionally stable and second-order accurate.
+
+Because Velocity Verlet is symplectic in the conservative limit ($\gamma = 0$), it preserves phase-space volume (Liouville's theorem), preventing secular energy drift over long integration times.
 
 ### 2.2 Forward Euler (Non-Symplectic, First-Order)
 $$\mathbf{r}(t + \Delta t) = \mathbf{r}(t) + \mathbf{v}(t) \Delta t$$
@@ -71,10 +86,10 @@ Euler systematically overestimates work along convex potential trajectories, int
 | **Task 1** | Verification | 10/10 analytical tests passed; internal force residual $< 5.4 \times 10^{-15}\text{ N}$; $N=100\text{k}$ memory matches C `sizeof` | Verified |
 | **Task 3** | Timestep Accuracy | Verlet achieves $\mathcal{O}(\Delta t^2)$ convergence ($\varepsilon_E < 0.31\%$ at $\Delta t=0.005\text{ s}$); Euler displays secular drift ($\varepsilon_E > 21\%$) | Verified |
 | **Task 4** | Dissipation | Mechanical energy decays monotonically; system arrests into static equilibrium in $t_{\text{relax}} = 16.54\text{ s}$ at $\gamma = 0.50\text{ s}^{-1}$ | Verified |
-| **Task 5** | Precision (float32 vs float64) | `float32` halves state memory ($1.93\times$ process savings); energy remains bounded ($\varepsilon_E \approx 3.4\%$) despite chaotic trajectory divergence | Verified |
+| **Task 5** | Precision (float32 vs float64) | `float32` saves $48.2\%$ tracked memory ($2.1\text{ KB}$ vs $4.1\text{ KB}$); runtime is $2.8\%$ slower due to 64-bit scalar CPU casting; energy drift is dominated by $\Delta t^2$ truncation ($\approx 0.30\%$ for both); trajectories diverge exponentially ($39.0\%$ RMS separation) | Verified |
 | **Task 6** | Computational Efficiency | Compiled C kernel (`-O2`, Newton's 3rd law loop) evaluates forces in $0.25\text{ ms}$ at $N=1000$ ($261\times$ faster than Python, $88\times$ faster than NumPy) | Verified |
 | **Task 7** | Memory Scalability | Dense displacement tensor $(N, N, 2)$ scales quadratically $\mathcal{O}(N^2)$; $N=50,000$ requires $37.25\text{ GiB}$ in float64, precipitating OOM failure | Verified |
-| **Task 8** | Spatial Partitioning (Cell Lists) | Work reduction reaches $3,789\times$ at $N=20,000$; linear $\mathcal{O}(N)$ scaling simulates $N=100,000$ in $56\text{ ms}$ with $27\text{ MB}$ RAM | Verified |
+| **Task 8** | Spatial Partitioning (Cell Lists) | Linear $\mathcal{O}(N)$ scaling achieves $3,789\times$ work reduction at $N=20,000$ (runs $N=100\text{k}$ in $56\text{ ms}$); verified bitwise exact against all-pairs engine under canonical and billiards regimes ($0.00\text{ m}$ drift) | Verified |
 
 ---
 

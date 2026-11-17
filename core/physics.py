@@ -21,7 +21,7 @@ def pairwise_distances(pos, rc=1.5):
 
 
 # Hookean spring pair forces
-def pair_forces(pos, k=4000.0, r0=0.70, rc=0.70):
+def pair_forces(pos, k=15.0, r0=1.5, rc=1.5):
     scalar = pos.dtype.type
     d, dist, neighbors = pairwise_distances(pos, rc=rc)
     denom = dist[:, :, None]
@@ -36,7 +36,7 @@ def pair_forces(pos, k=4000.0, r0=0.70, rc=0.70):
 
 
 # Total force combining spring forces and optional viscous damping
-def total_forces(pos, vel=None, mass=None, gamma=0.0, k=4000.0, r0=0.70, rc=0.70, pair_force_fn=None):
+def total_forces(pos, vel=None, mass=None, gamma=0.0, k=15.0, r0=1.5, rc=1.5, pair_force_fn=None):
     if pair_force_fn is not None:
         F_spring = pair_force_fn(pos, k=k, r0=r0, rc=rc)
     else:
@@ -55,7 +55,7 @@ def kinetic_energy(vel, mass=None):
 
 
 # Potential energy
-def potential_energy(pos, k=4000.0, r0=0.70, rc=0.70):
+def potential_energy(pos, k=15.0, r0=1.5, rc=1.5):
     scalar = pos.dtype.type
     _, dist, neighbors = pairwise_distances(pos, rc=rc)
     pair_u = scalar(0.5) * scalar(k) * ((dist - scalar(r0)) ** 2) * neighbors
@@ -102,7 +102,7 @@ def particle_collisions(pos, vel, radius=0.0):
 
 
 # Forward Euler integrator step
-def step_euler(pos, vel, mass, dt, L=10.0, gamma=0.0, k=4000.0, r0=0.70, rc=0.70, radius=0.0):
+def step_euler(pos, vel, mass, dt, L=10.0, gamma=0.0, k=15.0, r0=1.5, rc=1.5, radius=0.0):
     scalar = pos.dtype.type
     dt_val = scalar(dt)
     F = total_forces(pos, vel=vel, mass=mass, gamma=gamma, k=k, r0=r0, rc=rc)
@@ -113,10 +113,11 @@ def step_euler(pos, vel, mass, dt, L=10.0, gamma=0.0, k=4000.0, r0=0.70, rc=0.70
     return pos_new, vel_new
 
 
-# Velocity Verlet integrator step
+# Velocity Verlet integrator step with direct half-step or operator-split Stokes drag
 def step_verlet(
-    pos, vel, mass, dt, L=10.0, gamma=0.0, k=4000.0, r0=0.70, rc=0.70,
-    radius=0.0, F_prev=None, force_previous=None, pair_force_fn=None
+    pos, vel, mass, dt, L=10.0, gamma=0.0, k=15.0, r0=1.5, rc=1.5,
+    radius=0.0, F_prev=None, force_previous=None, pair_force_fn=None,
+    damping_mode="direct"
 ):
     if isinstance(L, np.ndarray):
         if force_previous is None and F_prev is None:
@@ -129,21 +130,40 @@ def step_verlet(
     dt_val = scalar(dt)
     half = scalar(0.5)
 
-    if F_prev is None:
-        F_prev = total_forces(
-            pos, vel=vel, mass=mass, gamma=gamma, k=k, r0=r0, rc=rc, pair_force_fn=pair_force_fn
-        )
-    a_prev = F_prev / mass[:, None]
-    vel_half = vel + half * a_prev * dt_val
-    pos_new = pos + vel_half * dt_val
-    pos_new, vel_half = walls_reflect(pos_new, vel_half, L, radius=radius)
+    if damping_mode == "operator_split" and gamma > 0.0:
+        decay = scalar(np.exp(-0.5 * gamma * dt))
+        vel_damped = vel * decay
+        if F_prev is None:
+            F_prev = total_forces(
+                pos, vel=None, mass=mass, gamma=0.0, k=k, r0=r0, rc=rc, pair_force_fn=pair_force_fn
+            )
+        a_prev = F_prev / mass[:, None]
+        vel_half = vel_damped + half * a_prev * dt_val
+        pos_new = pos + vel_half * dt_val
+        pos_new, vel_half = walls_reflect(pos_new, vel_half, L, radius=radius)
 
-    F_new = total_forces(
-        pos_new, vel=vel_half, mass=mass, gamma=gamma, k=k, r0=r0, rc=rc, pair_force_fn=pair_force_fn
-    )
-    a_new = F_new / mass[:, None]
-    vel_new = vel_half + half * a_new * dt_val
-    return pos_new, vel_new, F_new
+        F_new = total_forces(
+            pos_new, vel=None, mass=mass, gamma=0.0, k=k, r0=r0, rc=rc, pair_force_fn=pair_force_fn
+        )
+        a_new = F_new / mass[:, None]
+        vel_new = (vel_half + half * a_new * dt_val) * decay
+        return pos_new, vel_new, F_new
+    else:
+        if F_prev is None:
+            F_prev = total_forces(
+                pos, vel=vel, mass=mass, gamma=gamma, k=k, r0=r0, rc=rc, pair_force_fn=pair_force_fn
+            )
+        a_prev = F_prev / mass[:, None]
+        vel_half = vel + half * a_prev * dt_val
+        pos_new = pos + vel_half * dt_val
+        pos_new, vel_half = walls_reflect(pos_new, vel_half, L, radius=radius)
+
+        F_new = total_forces(
+            pos_new, vel=vel_half, mass=mass, gamma=gamma, k=k, r0=r0, rc=rc, pair_force_fn=pair_force_fn
+        )
+        a_new = F_new / mass[:, None]
+        vel_new = vel_half + half * a_new * dt_val
+        return pos_new, vel_new, F_new
 
 
 # Full trajectory simulation runner
@@ -241,7 +261,7 @@ def neighbor_pairs_cell(pos, L, rc):
 
 
 # Pair forces via spatial cell list (linear O(N) scaling)
-def pair_forces_cell(pos, L, k=4000.0, r0=0.70, rc=0.70):
+def pair_forces_cell(pos, L, k=15.0, r0=1.5, rc=1.5):
     N = len(pos)
     i, j, d, dist = neighbor_pairs_cell(pos, L, rc)
     scalar = pos.dtype.type
@@ -255,7 +275,7 @@ def pair_forces_cell(pos, L, k=4000.0, r0=0.70, rc=0.70):
 
 
 # Potential energy via spatial cell list
-def potential_energy_cell(pos, L, k=4000.0, r0=0.70, rc=0.70):
+def potential_energy_cell(pos, L, k=15.0, r0=1.5, rc=1.5):
     _, _, _, dist = neighbor_pairs_cell(pos, L, rc)
     scalar = pos.dtype.type
     return scalar(0.5) * np.sum(scalar(k) * ((dist - scalar(r0)) ** 2), dtype=pos.dtype)
