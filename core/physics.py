@@ -195,3 +195,68 @@ def run_sim(
         "rel_err": rel_err, "v_mean": v_mean, "pos_hist": pos_hist,
         "eps_E_max": eps_E_max, "eps_E_rms": eps_E_rms
     }
+
+
+# Spatial decomposition: 2D cell binning
+def build_cells(pos, L, rc):
+    ncell = max(1, int(np.floor(L / rc)))
+    w = L / ncell
+    cx = np.minimum((pos[:, 0] / w).astype(np.int64), ncell - 1)
+    cy = np.minimum((pos[:, 1] / w).astype(np.int64), ncell - 1)
+    cid = cx * ncell + cy
+    order = np.argsort(cid, kind="stable")
+    count = np.bincount(cid, minlength=ncell * ncell)
+    start = np.cumsum(count) - count
+    return cx, cy, order, start, count, ncell
+
+
+# Stencil evaluation across 3x3 neighboring cells
+def neighbor_pairs_cell(pos, L, rc):
+    N = len(pos)
+    cx, cy, order, start, count, ncell = build_cells(pos, L, rc)
+    I, J = [], []
+    ids = np.arange(N)
+    for ox in (-1, 0, 1):
+        for oy in (-1, 0, 1):
+            nx, ny = cx + ox, cy + oy
+            ok = (nx >= 0) & (nx < ncell) & (ny >= 0) & (ny < ncell)
+            nc = np.where(ok, nx * ncell + ny, 0)
+            cnt = np.where(ok, count[nc], 0)
+            tot = cnt.sum()
+            if tot == 0:
+                continue
+            i_rep = np.repeat(ids, cnt)
+            first = np.cumsum(cnt) - cnt
+            within = np.arange(tot) - np.repeat(first, cnt)
+            j = order[start[nc][i_rep] + within]
+            keep = j > i_rep
+            I.append(i_rep[keep])
+            J.append(j[keep])
+    i = np.concatenate(I)
+    j = np.concatenate(J)
+    d = pos[i] - pos[j]
+    dist = np.sqrt(np.sum(d * d, axis=1, dtype=pos.dtype))
+    m = (dist > 1e-14) & (dist <= rc)
+    return i[m], j[m], d[m], dist[m]
+
+
+# Pair forces via spatial cell list (linear O(N) scaling)
+def pair_forces_cell(pos, L, k=4000.0, r0=0.70, rc=0.70):
+    N = len(pos)
+    i, j, d, dist = neighbor_pairs_cell(pos, L, rc)
+    scalar = pos.dtype.type
+    fmag = -scalar(k) * (dist - scalar(r0))
+    u = np.divide(d, dist[:, None], out=np.zeros_like(d), where=dist[:, None] > 1e-14)
+    f = fmag[:, None] * u
+    F = np.empty((N, 2), dtype=pos.dtype)
+    for c in range(2):
+        F[:, c] = np.bincount(i, f[:, c], minlength=N) - np.bincount(j, f[:, c], minlength=N)
+    return F
+
+
+# Potential energy via spatial cell list
+def potential_energy_cell(pos, L, k=4000.0, r0=0.70, rc=0.70):
+    _, _, _, dist = neighbor_pairs_cell(pos, L, rc)
+    scalar = pos.dtype.type
+    return scalar(0.5) * np.sum(scalar(k) * ((dist - scalar(r0)) ** 2), dtype=pos.dtype)
+

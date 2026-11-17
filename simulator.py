@@ -209,6 +209,9 @@ def run_live_simulation(
         except Exception:
             backend = "numpy"
             pair_force_fn = None
+    elif backend in ("cell", "cell_list"):
+        from core.physics import pair_forces_cell
+        pair_force_fn = lambda pos, k=4000.0, r0=0.70, rc=0.70: pair_forces_cell(pos, L=L, k=k, r0=r0, rc=rc)
 
     if radius is not None and r0 is None:
         radius = float(radius)
@@ -436,37 +439,46 @@ def run_task7():
     return run_task_7()
 
 
+def run_task8(fast=False):
+    """Execute Task 8: Spatial partitioning via cell lists (O(N) runtime & memory)."""
+    from Task8_Cell_Lists.task8_cell_list import run_task_8
+    return run_task_8(fast=fast)
+
+
 def run_all_tasks():
     """
-    Execute Tasks 1, 3, 4, 5, 6, and 7 in an automated sequential batch.
+    Execute Tasks 1, 3, 4, 5, 6, 7, and 8 in an automated sequential batch.
     """
     print("=" * 86)
-    print("UNIFIED COMMAND CENTER: RUNNING ALL EXPERIMENTAL & VERIFICATION TASKS (1, 3, 4, 5, 6, 7)")
+    print("UNIFIED COMMAND CENTER: RUNNING ALL EXPERIMENTAL & VERIFICATION TASKS (1, 3, 4, 5, 6, 7, 8)")
     print("=" * 86)
 
-    print("\n>>> [STEP 1/6] EXECUTING TASK 1: NUMERICAL VERIFICATION SUITE\n")
+    print("\n>>> [STEP 1/7] EXECUTING TASK 1: NUMERICAL VERIFICATION SUITE\n")
     success1 = run_task1()
     if not success1:
         print("\n[ABORT] Task 1 verification suite failed! Stopping sequence.")
         sys.exit(1)
 
-    print("\n>>> [STEP 2/6] EXECUTING TASK 3: TIMESTEP ACCURACY & ENERGY CONSERVATION\n")
+    print("\n>>> [STEP 2/7] EXECUTING TASK 3: TIMESTEP ACCURACY & ENERGY CONSERVATION\n")
     run_task3()
 
-    print("\n>>> [STEP 3/6] EXECUTING TASK 4: VISCOUS DISSIPATION & EQUILIBRIUM RELAXATION\n")
+    print("\n>>> [STEP 3/7] EXECUTING TASK 4: VISCOUS DISSIPATION & EQUILIBRIUM RELAXATION\n")
     run_task4()
 
-    print("\n>>> [STEP 4/6] EXECUTING TASK 5: NUMERICAL PRECISION (FLOAT32 VS FLOAT64)\n")
+    print("\n>>> [STEP 4/7] EXECUTING TASK 5: NUMERICAL PRECISION (FLOAT32 VS FLOAT64)\n")
     run_task5()
 
-    print("\n>>> [STEP 5/6] EXECUTING TASK 6: EFFICIENCY BENCHMARK (PYTHON VS NUMPY VS C)\n")
+    print("\n>>> [STEP 5/7] EXECUTING TASK 6: EFFICIENCY BENCHMARK (PYTHON VS NUMPY VS C)\n")
     run_task6()
 
-    print("\n>>> [STEP 6/6] EXECUTING TASK 7: DISPLACEMENT TENSOR MEMORY SCALING & OOM ANALYSIS\n")
+    print("\n>>> [STEP 6/7] EXECUTING TASK 7: DISPLACEMENT TENSOR MEMORY SCALING & OOM ANALYSIS\n")
     run_task7()
 
+    print("\n>>> [STEP 7/7] EXECUTING TASK 8: SPATIAL PARTITIONING VIA CELL LISTS (O(N))\n")
+    run_task8(fast=True)
+
     print("\n" + "=" * 86)
-    print("ALL EXPERIMENTAL TASKS (1, 3, 4, 5, 6, 7) COMPLETED SUCCESSFULLY!")
+    print("ALL EXPERIMENTAL TASKS (1, 3, 4, 5, 6, 7, 8) COMPLETED SUCCESSFULLY!")
     print("=" * 86)
 
 
@@ -506,12 +518,20 @@ def parse_args():
         help="Run Task 7 2D & 3D displacement tensor memory scaling and OOM analysis."
     )
     parser.add_argument(
-        "--all-tasks", action="store_true",
-        help="Run Tasks 1, 3, 4, 5, 6, and 7 in sequential automated batch."
+        "--task8", action="store_true",
+        help="Run Task 8 spatial partitioning / cell list benchmark (O(N) vs O(N^2))."
     )
     parser.add_argument(
-        "--backend", type=str, choices=["numpy", "c"], default=None,
-        help="Force calculation backend: 'numpy' (vectorized broadcasting) or 'c' (compiled ctypes kernel, pairforce.c)."
+        "--fast", action="store_true",
+        help="Run accelerated benchmark mode for tasks supporting fast evaluation (e.g. Task 8)."
+    )
+    parser.add_argument(
+        "--all-tasks", action="store_true",
+        help="Run Tasks 1, 3, 4, 5, 6, 7, and 8 in sequential automated batch."
+    )
+    parser.add_argument(
+        "--backend", type=str, choices=["numpy", "c", "cell", "cell_list"], default=None,
+        help="Force calculation backend: 'numpy' (vectorized broadcasting), 'c' (compiled C library), or 'cell' (spatial cell list, O(N))."
     )
     parser.add_argument(
         "--c-backend", dest="backend", action="store_const", const="c",
@@ -597,7 +617,12 @@ def main():
         run_task7()
         sys.exit(0)
 
-    # Route 8: Interactive Live Simulation (GUI or Headless)
+    # Route 8: Run Task 8 spatial partitioning / cell list analysis
+    if args.task8:
+        run_task8(fast=args.fast)
+        sys.exit(0)
+
+    # Route 9: Interactive Live Simulation (GUI or Headless)
     run_live_simulation(
         preset=args.preset,
         gamma=args.gamma,

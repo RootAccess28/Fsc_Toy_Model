@@ -1,0 +1,39 @@
+
+=== EXPERIMENT 1: correctness (cell list vs baseline) ===
+N=   12  pairs base/cell = 8/8  max|dF| = 3.55e-15  rel = 9.12e-17  |dU| = 0.00e+00  |sum F_cell| = 1.32e-14
+N=  200  pairs base/cell = 139/139  max|dF| = 7.11e-15  rel = 1.04e-16  |dU| = 0.00e+00  |sum F_cell| = 1.82e-14
+N= 1000  pairs base/cell = 694/694  max|dF| = 7.11e-15  rel = 1.16e-16  |dU| = 0.00e+00  |sum F_cell| = 1.13e-13
+N= 3000  pairs base/cell = 2197/2197  max|dF| = 1.42e-14  rel = 1.13e-16  |dU| = 0.00e+00  |sum F_cell| = 7.46e-13
+edge case (particles exactly on walls/corners): max|dF| = 0.00e+00
+
+=== EXPERIMENT 2: timing and memory (median of 7 runs, constant density) ===
+N=    50  loop=   0.0002s  vec=  0.00011s  cell=  0.00018s  speedup(vec/cell)=   0.64  mem vec=      0.2 MB  cell=   0.02 MB
+N=   200  loop=   0.0022s  vec=  0.00181s  cell=  0.00021s  speedup(vec/cell)=   8.81  mem vec=      2.7 MB  cell=   0.06 MB
+N=   500  loop=   0.0135s  vec=  0.01201s  cell=  0.00030s  speedup(vec/cell)=  39.39  mem vec=     16.3 MB  cell=   0.15 MB
+N=  1000  loop=   0.0578s  vec=  0.06004s  cell=  0.00049s  speedup(vec/cell)= 123.33  mem vec=     65.1 MB  cell=   0.28 MB
+N=  2000  loop=      nans  vec=  0.24064s  cell=  0.00084s  speedup(vec/cell)= 285.21  mem vec=    260.1 MB  cell=   0.57 MB
+N=  5000  loop=      nans  vec=  1.57562s  cell=  0.00205s  speedup(vec/cell)= 770.00  mem vec=   1625.1 MB  cell=   1.43 MB
+N= 10000  loop=      nans  vec=      nans  cell=  0.00408s  speedup(vec/cell)=    nan  mem vec=      nan MB  cell=   2.70 MB
+N= 20000  loop=      nans  vec=      nans  cell=  0.00848s  speedup(vec/cell)=    nan  mem vec=      nan MB  cell=   5.36 MB
+N= 50000  loop=      nans  vec=      nans  cell=  0.02520s  speedup(vec/cell)=    nan  mem vec=      nan MB  cell=  13.55 MB
+N=100000  loop=      nans  vec=      nans  cell=  0.05624s  speedup(vec/cell)=    nan  mem vec=      nan MB  cell=  27.01 MB
+
+=== EXPERIMENT 3: cell-list time breakdown at N=20000 ===
+build cells = 1.38 ms | + candidate-pair search & filter = 8.72 ms | total force = 9.12 ms
+
+=== EXPERIMENT 4: full velocity-Verlet simulation, N=2000, 200 steps ===
+wall time  old = 85.47s   new = 0.37s   speedup = 233.30x
+relative final-position difference = 3.31e-17
+max rel. energy drift  old = 2.036e+00   new = 2.036e+00   |E_old - E_new| max rel = 1.20e-15
+all particles inside box (cell run): True
+
+=== EXPERIMENT 5: distance evaluations per force call ===
+N=   200  all-pairs =        40000  cell-list candidates =      1052  true neighbour pairs =     168  work reduction =     38.0x
+N=  1000  all-pairs =      1000000  cell-list candidates =      5362  true neighbour pairs =     757  work reduction =    186.5x
+N=  5000  all-pairs =     25000000  cell-list candidates =     26140  true neighbour pairs =    3735  work reduction =    956.4x
+N= 20000  all-pairs =    400000000  cell-list candidates =    105568  true neighbour pairs =   15038  work reduction =   3789.0x
+
+scaling exponents (t ~ N^p):  NumPy O(N^2) p = 2.10   cell list p = 1.04
+memory exponents (peak ~ N^q): vectorized q = 2.00   cell list q = 0.99
+
+Done. Figures and CSVs written to /mnt/user-data/outputs

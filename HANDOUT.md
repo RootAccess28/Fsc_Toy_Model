@@ -15,6 +15,7 @@ This report documents the numerical modeling, verification, and computational pr
 4. Single-precision (`float32`) versus double-precision (`float64`) numerical stability, memory bandwidth, and Lyapunov trajectory divergence.
 5. Algorithmic efficiency across interpreted Python, vectorized NumPy broadcasting, and native compiled C (`-O2`).
 6. Quadratic memory scaling $\mathcal{O}(N^2)$ of dense pairwise displacement tensors and hardware memory limits.
+7. Spatial partitioning via cell-linked lists, reducing algorithmic time and memory complexity from $\mathcal{O}(N^2)$ to strictly linear $\mathcal{O}(N)$.
 
 ---
 
@@ -73,6 +74,7 @@ Euler systematically overestimates work along convex potential trajectories, int
 | **Task 5** | Precision (float32 vs float64) | `float32` halves state memory ($1.93\times$ process savings); energy remains bounded ($\varepsilon_E \approx 3.4\%$) despite chaotic trajectory divergence | Verified |
 | **Task 6** | Computational Efficiency | Compiled C kernel (`-O2`, Newton's 3rd law loop) evaluates forces in $0.25\text{ ms}$ at $N=1000$ ($261\times$ faster than Python, $88\times$ faster than NumPy) | Verified |
 | **Task 7** | Memory Scalability | Dense displacement tensor $(N, N, 2)$ scales quadratically $\mathcal{O}(N^2)$; $N=50,000$ requires $37.25\text{ GiB}$ in float64, precipitating OOM failure | Verified |
+| **Task 8** | Spatial Partitioning (Cell Lists) | Work reduction reaches $3,789\times$ at $N=20,000$; linear $\mathcal{O}(N)$ scaling simulates $N=100,000$ in $56\text{ ms}$ with $27\text{ MB}$ RAM | Verified |
 
 ---
 
@@ -81,7 +83,7 @@ Euler systematically overestimates work along convex potential trajectories, int
 ```text
 ProjectM/
 ├── core/                                         # Shared physics engine and C kernel
-│   ├── physics.py                                # Vectorized physics functions
+│   ├── physics.py                                # Vectorized physics functions and cell lists
 │   ├── c_kernel.py                               # Native C dynamic library loader
 │   ├── pairforce.c                               # C source code
 │   └── libpairforce.dylib                        # Compiled shared library
@@ -116,6 +118,11 @@ ProjectM/
 │   ├── results/                                  # Memory measurements and scaling curves
 │   └── HANDOUT.md
 │
+├── Task8_Cell_Lists/                             # Spatial partitioning via cell lists (O(N))
+│   ├── task8_cell_list.py
+│   ├── results/                                  # Speedup, memory, and cell stencil plots
+│   └── HANDOUT.md
+│
 ├── simulator.py                                  # Live 2D visualization & verification runner
 ├── AI_USAGE_LOG.md                               # Academic AI disclosure record
 └── HANDOUT.md                                    # This report
@@ -130,10 +137,12 @@ python3 Task4_Viscous_Dissipation/task4_dissipation.py
 python3 Task5_Numerical_Precision/task5_precision_2d.py
 python3 Task6_Computational_Efficiency/task6_benchmark.py
 python3 Task7_Memory_Scalability/task7_memory.py
+python3 Task8_Cell_Lists/task8_cell_list.py
 
 # Launch interactive simulation:
 python3 simulator.py
 python3 simulator.py --backend c                  # Using compiled C backend
+python3 simulator.py --backend cell               # Using O(N) spatial cell list backend
 python3 simulator.py --preset dissipative        # Using viscous fluid preset
 ```
 
