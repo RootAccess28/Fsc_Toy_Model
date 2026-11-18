@@ -41,3 +41,4 @@ We affirm on our academic honor that:
 2. The AI usage listed above was conducted responsibly and strictly within the scope of syntax and formatting utility.
 3. Every line of code generated with AI assistance was independently checked for mathematical correctness and verified against analytical solutions.
 4. Some casual usage of AI(for syntax, seeing function parameters and understanding some ideas related to general physics) was done and may have missed documentation due to the informal nature of it.
+5. Formatting tools to make HANDOUTs and PDF to look more appealing were used, while the content remains original.

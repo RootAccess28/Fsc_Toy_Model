@@ -144,7 +144,7 @@ ProjectM/
 ```
 
 ### Execution Commands
-```bash
+```bash 
 # Run individual task experiments:
 python3 Task1_Verification/task1_verification.py
 python3 Task3_Timestep_Accuracy/task3_accuracy.py

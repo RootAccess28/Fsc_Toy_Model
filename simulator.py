@@ -1,39 +1,3 @@
-"""
-Molecular / Atomic Toy Model Simulation Engine
-===============================================
-Unified physics engine, live visual simulation with real-time energy tracking,
-numerical verification test suite (Task 1), and integrators (Tasks 2, 3, 4).
-Master command center and architectural reference for Tasks 5, 6, 7, 8, and 9.
-
-Usage:
-    # 1. Dual-Panel Interactive Live GUI Simulation (Particle view + Real-time Energy graphs)
-    python3 simulator.py
-    python3 simulator.py --preset dissipative
-    python3 simulator.py --preset strong_damping
-    python3 simulator.py --preset euler_drift
-
-    # 2. Task 1 Verification Suite (Memory layout, symmetry, conservation, momentum)
-    python3 simulator.py --task1
-    python3 simulator.py --verify
-
-    # 3. Task 3 Timestep Accuracy & Energy Conservation Suite (Saves plots in 'Task3_Timestep_Accuracy/results/')
-    python3 simulator.py --task3
-
-    # 4. Task 4 Dissipation & Relaxation Suite (Saves plots in 'Task4_Viscous_Dissipation/results/')
-    python3 simulator.py --task4
-
-    # 5. Automated Sequential Batch: All Tasks (1, 3, and 4)
-    python3 simulator.py --all-tasks
-
-    # 6. Headless Execution / Animation Export
-    python3 simulator.py --headless --frames 100
-    python3 simulator.py --save-anim simulation.gif --frames 200
-
-    # 7. Custom Physics / Integrator Parameters
-    python3 simulator.py --N 24 --gamma 0.1 --dt 0.005 --method verlet
-    python3 simulator.py --radius 0.35 --trail-len 40 --dt 0.002 --headless --frames 50
-    python3 simulator.py --radius 0.1 --trail-len 10 --dt 0.005 --headless --frames 50
-"""
 
 import sys
 import os
@@ -45,8 +9,7 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 from matplotlib.collections import LineCollection
 
-# Ensure 'simulator' module is present in sys.modules when invoked directly as __main__
-# to prevent redundant reloading or circular imports when task3_4 imports from simulator
+# to prevent excessive reloading or recursive imports when task3_4 imports from simulator
 if __name__ == "__main__" and "simulator" not in sys.modules:
     sys.modules["simulator"] = sys.modules[__name__]
 
@@ -72,7 +35,7 @@ DEFAULT_CONFIG = {
     "dynamic_squish": True,
 }
 
-# Exposed top-level aliases for direct, convenient access
+# Exposed parameters for direct, for convenient access
 DEFAULT_RADIUS = DEFAULT_CONFIG["radius"]
 DEFAULT_TRAIL_LEN = DEFAULT_CONFIG["trail_len"]
 DEFAULT_DT = DEFAULT_CONFIG["dt"]
@@ -158,10 +121,7 @@ PRESET_SPECIALIZATIONS = {
 }
 
 def get_preset_config(preset_name="conservative"):
-    """
-    Construct a full configuration dictionary dynamically by starting from DEFAULT_CONFIG
-    and applying the specific physics modifications for the given preset.
-    """
+
     cfg = DEFAULT_CONFIG.copy()
     if preset_name in PRESET_SPECIALIZATIONS:
         cfg.update(PRESET_SPECIALIZATIONS[preset_name])
@@ -196,15 +156,7 @@ def run_live_simulation(
     backend=None,
     dynamic_squish=None,
 ):
-    """
-    Launches side-by-side real-time interactive simulation:
-      - Left panel: Particle motion in 2D box with color-coded particles, tracers, and wall bounce.
-      - Right panel: Live energy curves tracking K(t), U(t), and E_tot(t) simultaneously!
 
-    All parameters cleanly fall back to preset specializations or DEFAULT_CONFIG
-    when omitted (None), and can be dynamically overridden either programmatically
-    or via CLI flags.
-    """
     # 1. Resolve configuration from preset and overrides
     if preset is None:
         preset = DEFAULT_CONFIG.get("preset", "conservative")
@@ -334,9 +286,9 @@ def run_live_simulation(
                 )
                 F_prev[0] = F_new
 
-            # Pure Physics Mode: repulsive spring forces handle 100% of the contact physics
-            # continuously without artificial position-teleportation jumps.
-            # Hard-core separation is only invoked if explicitly requested via --hard-core.
+           
+            # hard core system to prevent extreme cases(matter overlap) if physics glitches (rare but important for reliability)
+           
             if hard_core and radius > 0.0:
                 p_new, v_new = particle_collisions(p_new, v_new, radius)
 
@@ -425,56 +377,50 @@ def run_live_simulation(
     return anim
 
 
-# =============================================================================
-# 5. TASK COMMAND DISPATCHERS (TASKS 1 - 7)
-# =============================================================================
-
 def run_task1():
-    """Execute Task 1 numerical verification suite."""
+ 
     from Task1_Verification.task1_verification import run_task_1
     return run_task_1(headless=True)
 
 
 def run_task3():
-    """Execute Task 3 numerical experiments: Timestep accuracy & energy drift."""
+ 
     from Task3_Timestep_Accuracy.task3_accuracy import execute_task_3
     return execute_task_3()
 
 
 def run_task4():
-    """Execute Task 4 numerical experiments: Viscous dissipation & equilibrium relaxation."""
+ 
     from Task4_Viscous_Dissipation.task4_dissipation import execute_task_4
     return execute_task_4()
 
 
 def run_task5():
-    """Execute Task 5: float32 vs float64 precision study."""
+
     from Task5_Numerical_Precision.task5_precision_2d import run_task_5
     return run_task_5()
 
 
 def run_task6():
-    """Execute Task 6: Pair-force computational efficiency benchmark (Python vs NumPy vs C)."""
+    
     from Task6_Computational_Efficiency.task6_benchmark import run_task_6
     return run_task_6()
 
 
 def run_task7():
-    """Execute Task 7: 2D & 3D displacement tensor memory and OOM scalability analysis."""
+  
     from Task7_Memory_Scalability.task7_memory import run_task_7
     return run_task_7()
 
 
 def run_task8(fast=False):
-    """Execute Task 8: Spatial partitioning via cell lists (O(N) runtime & memory)."""
+
     from Task8_Cell_Lists.task8_cell_list import run_task_8
     return run_task_8(fast=fast)
 
 
 def run_all_tasks():
-    """
-    Execute Tasks 1, 3, 4, 5, 6, 7, and 8 in an automated sequential batch.
-    """
+
     print("=" * 86)
     print("UNIFIED COMMAND CENTER: RUNNING ALL EXPERIMENTAL & VERIFICATION TASKS (1, 3, 4, 5, 6, 7, 8)")
     print("=" * 86)

@@ -45,3 +45,19 @@ Files shared
 3\. Source codes, testing codes, visualisation codes and generated movie files, with instructions to run them.  
 4\. Project document and PDF report containing implementation details, results, time snapshots and relevant plots.  
 5\. Prompts and recorded sessions with AI  
+
+* [COMMANDS_TO_START] 
+In a bash terminal :
+```bash 
+python3 Task1_Verification/task1_verification.py
+python3 Task3_Timestep_Accuracy/task3_accuracy.py
+python3 Task4_Viscous_Dissipation/task4_dissipation.py
+python3 Task5_Numerical_Precision/task5_precision_2d.py
+python3 Task6_Computational_Efficiency/task6_benchmark.py
+python3 Task7_Memory_Scalability/task7_memory.py
+python3 Task8_Cell_Lists/task8_cell_list.py    
+
+python3 simulator.py
+python3 simulator.py --backend c                  # using our C binary (linking it)
+python3 simulator.py --backend cell               # O(N) backend list
+python3 simulator.py --preset dissipative        # considering viscous drag
