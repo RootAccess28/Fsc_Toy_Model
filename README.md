@@ -1,11 +1,11 @@
 Details of members
 
-1\. Prakhar CO26BTECH11024  
-2\. Nitin CO26BTECH11021  
-3\. Moksh CO26BTECH11017  
-4\. Anushka CO26BTECH11030  
-5\. Shivansi CO26BTECH11027  
-6\. Neil CO26BTECH11019
+1\. Prakhar CO26BTECH11024  - Crystal-Lightning
+2\. Nitin CO26BTECH11021  - RootAccess26
+3\. Moksh CO26BTECH11017  - Mox08
+4\. Anushka CO26BTECH11030  - Anushka8007
+5\. Shivansi CO26BTECH11027  - Due to some technical issue other members had to upload her files, regardless she has done the task alloted to her perfectly.
+6\. Neil CO26BTECH11019 - n31l-s
 
 Report:  
 [Click this to access the report](https://github.com/RootAccess28/Fsc_Toy_Model/blob/main/FSC_2D_Colliding_Particles_Final_Report.pdf)
